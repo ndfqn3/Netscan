@@ -1,33 +1,60 @@
-# Release Notes — NetScan v2.0
+# Release Notes
 
-## 变更列表
+## v2.0（当前版本）
 
-### 新增功能
+> 全能扫描器版本：新增高危未授权检测、CMS 指纹、代理、HTML 报告、子域名深度爆破、定时监控等 10 项能力，CLI 与 GUI 功能对齐。
 
-1. **高危端口未授权访问检测（POC）**：新增 `--poc`，对 Redis、MongoDB、Elasticsearch、Docker API、Jenkins、Nacos、Memcached、CouchDB、etcd、Consul、Hadoop YARN 等常见高危服务发送轻量探测包（1-2 个包、2 秒超时），判定未授权访问风险，结果标记 `[高危]`。
-2. **CMS/Web 指纹识别**：新增 `--fp`，识别 WordPress、Discuz、ThinkPHP、DedeCMS、Joomla、Drupal、Laravel、Shiro、Spring Boot、Tomcat、Nginx、IIS 等，支持版本号提取（被动指纹 + 响应特征）。
-3. **代理扫描**：新增 `--proxy socks5://host:port` 或 `--proxy http://host:port`，所有 TCP 连接与 HTTP 请求走代理（基于 `golang.org/x/net/proxy`，纯 Go）。
-4. **HTML 报告生成**：新增 `-oH report.html`，生成自包含暗色主题 HTML 报告（含目标、统计、主机/端口/服务/风险明细），内嵌 CSS，无需外部依赖。
-5. **子域名深度爆破**：`SubdomainBrute` 升级为广度优先搜索（BFS），新增 `--sub-depth 1-3`，通过反向 DNS 递归发现新域名，队列 + 循环实现（无递归函数）。
-6. **定时扫描 + 变更监控**：新增 `--monitor target` 与 `--interval 24h`，扫描结果保存到 `~/.netscan_state/`，与上次比对输出 `+ 新增`/`- 消失`，生成差异文件，退出码 10=有变化、0=无变化、1=错误（文件锁防止同一目标并发执行）。
-7. **快速命中即停**：新增 `--stop-after-host`，命中首个存活主机或首个开放端口后立即优雅停止。
-8. **proot 安全降级**：自动检测 Termux/proot 环境，禁用 raw socket 并降低并发/限速，新增 `--force-raw` 覆盖。
-9. **目标上限保护**：新增 `--max-targets`（默认 10000），在目标解析阶段提前校验，防止误输入 `/0` 导致内存爆炸（16M 主机直接报错而非卡死）。
-10. **版本号自动注入**：`version` 由构建脚本通过 `git describe --tags --always --dirty` 注入（`-ldflags "-X main.version=..."`），新增 `-version` 参数。
+### ✨ 新增功能
 
-### GUI 同步更新
+| 功能 | 使用方式 | 说明 |
+|------|---------|------|
+| 高危未授权访问检测 | `--poc` | Redis、MongoDB、ES、Docker、Jenkins、Nacos 等，结果标 `[高危]` |
+| CMS/Web 指纹识别 | `--fp` | WordPress、Discuz、ThinkPHP、DedeCMS、Shiro 等 + 版本提取 |
+| 代理扫描 | `--proxy` | 支持 `socks5://` 与 `http://`，TCP 连接与 HTTP 请求走代理 |
+| HTML 报告 | `-oH report.html` | 自包含暗色主题报告，内嵌 CSS |
+| 子域名深度爆破 | `--sub-depth 1-3` | BFS + 反向 DNS 递归，队列实现 |
+| 定时扫描 + 变更监控 | `--monitor` / `--interval` | 对比上次结果输出差异，退出码 10/0/1 |
+| 快速命中即停 | `--stop-after-host` | 首个存活主机/开放端口即停 |
+| proot 安全降级 | 自动 / `--force-raw` | 移动端自动禁 raw socket、降并发 |
+| 目标上限保护 | `--max-targets` | 解析阶段提前校验，防误扫大网段卡死 |
+| 版本号自动注入 | `-version` | 构建时从 `git describe` 注入 |
 
-- 新增「高危检测(POC)」「CMS指纹」开关。
-- 结果表中高危风险以红色 `⚠高危` 标记（悬停显示详情）。
+### 🔧 GUI 更新
+
+- 新增「高级选项」卡片（代理 / 速率 / 排除端口 / 排序）
+- 新增「Banner 抓取」「命中即停」开关
+- 新增「导出 HTML 报告」「路由跟踪」「Ping」按钮
+- 高危风险红色 `⚠高危` 标记（悬停显示详情）
+- Web 侦察新增「子域名爆破深度」
+
+### 📝 文档
+
+- README 重构（功能分类、参数表格、快速开始、目录结构、平台矩阵）
+- 新增「移动端使用警告」章节
+
+---
+
+## 历史版本
+
+### v1.x
+
+- 核心扫描能力：主机发现（ARP/ICMP/TCP）、多技术端口扫描、服务/版本识别、OS 识别
+- 输出格式：JSON / XML / grepable / 普通文本
+- Web 侦察：目录爆破、子域名爆破、Whois、DNS、Web 头检查
+- 路由跟踪、Ping、Banner 抓取、统计摘要
+- 中文图形界面（WebView 渲染）
+
+---
 
 ## 升级指南
 
-- **命令行向后兼容**：所有旧参数保持不变，新增参数均为可选，不影响已有脚本。
-- **状态文件位置**：监控状态保存在 `~/.netscan_state/`，如需清理可删除该目录。
-- **proot 用户**：升级后移动端扫描会自动降级，如之前依赖 raw socket 请改用 TCP Connect 或加 `--force-raw`。
+- **向后兼容**：所有旧参数保持不变，新参数均为可选，不影响已有脚本。
+- **状态文件**：监控状态保存在 `~/.netscan_state/`，清理可删除该目录。
+- **proot 用户**：移动端会自动降级，如需 raw socket 改用 `--force-raw`。
+- **GUI 依赖**：Windows 需 WebView2，Linux 需 WebKitGTK，macOS 系统自带。
 
 ## 全局约束
 
-- 纯 Go 核心（CLI 无 CGO），保持单文件 exe、跨平台（Windows/Linux/macOS）。
+- 核心纯 Go（CLI 无 CGO），单文件 exe，跨平台。
 - 所有网络操作均有超时控制。
-- GUI（WebView）为独立二进制，依赖系统 WebView 运行时。
+- 保持命令行参数向后兼容。

@@ -1,180 +1,202 @@
-# NetScan 网络扫描器
+# NetScan
 
-一个使用 Go 编写的网络端口扫描器，提供**命令行（CLI）**与**图形界面（GUI）**两种形态，支持主机发现、多技术端口扫描、服务/版本识别与操作系统识别。
+一款用 Go 编写的全能网络扫描器，提供 **命令行（CLI）** 与 **图形界面（GUI）** 两种形态，集主机发现、端口扫描、服务识别、OS 识别、漏洞检测、Web 侦察于一体。
 
-## 功能特性
+---
 
-- **主机发现**：同网段用 ARP（最可靠）、跨网段用 ICMP、无权限时回退 TCP，综合判断主机存活；支持「仅主机发现」模式（`-sn`）。
-- **端口扫描**：
-  - TCP Connect（全连接，跨平台可用）
-  - TCP SYN（半开扫描，需 Linux + root）
-  - UDP 扫描（通过 ICMP 端口不可达报文判断）
-  - FIN / NULL / Xmas / ACK 扫描（raw socket，需 Linux + root）
-- **服务与版本识别**：内置 40+ 服务指纹正则与主动探针，覆盖 SSH、FTP、SMTP、POP3、IMAP、HTTP（nginx/Apache/IIS/Tomcat 等）、MySQL、PostgreSQL、Redis、Memcached、MongoDB、Elasticsearch、RabbitMQ、MQTT、VNC、RDP 等常见服务。
-- **操作系统识别**：基于 TTL 与开放端口特征（RDP/SMB/SSH/NFS 等）启发式判断。
-- **灵活的目标语法**：单 IP、CIDR、IP 范围、域名、IPv6 字面量，支持逗号分隔与组合。
-- **灵活的端口表达式**：单端口、端口段、枚举、`top-N` 常用端口、全部端口，支持**排除端口**（`--exclude-ports`）。
-- **定时模板**：T0（偏执）到 T5（疯狂）六档，自动推导超时与并发数。
-- **速率限制**（`--rate`，对标 masscan）与**随机端口顺序**（`--randomize`）。
-- **多格式输出**：普通文本、JSON、XML、grepable、CSV、**HTML 报告**（`-oN` / `-oJ` / `-oX` / `-oG` / `-oC` / `-oH`）。
-- **实时流式输出**：扫描结果逐条实时打印，无需等待扫描全部完成。
-- **中文图形界面**（WebView 渲染，现代暗色主题，跨平台）。
-- **Web 侦察**：目录/文件爆破（dirsearch）、HTTP 安全头检查、子域名爆破（支持递归深度）、Whois 查询、DNS 记录查询。
-- **高危未授权访问检测**（`--poc`）：对 Redis、MongoDB、Elasticsearch、Docker、Jenkins、Nacos、Memcached、CouchDB、etcd、Consul、Hadoop 等常见高危服务发送轻量探测，标记 `[高危]`。
-- **CMS/Web 指纹识别**（`--fp`）：识别 WordPress、Discuz、ThinkPHP、DedeCMS、Joomla、Drupal、Laravel、Shiro、Spring Boot、Tomcat、Nginx 等。
-- **代理扫描**（`--proxy socks5://...` 或 `http://...`）：TCP 连接与 HTTP 请求走代理（raw socket 不支持代理）。
-- **定时扫描 + 变更监控**（`--monitor`、`--interval`）：与上次结果比对，输出新增/消失项，退出码 10=有变化、0=无变化。
-- **快速命中即停**（`--stop-after-host`）、**目标上限保护**（`--max-targets`，防误扫 `/0` 导致内存爆炸）、**proot 安全降级**（移动端自动禁用 raw socket 并降并发）。
+## 目录
 
-## 技术栈
+- [功能概览](#功能概览)
+- [快速开始](#快速开始)
+- [编译与安装](#编译与安装)
+- [命令行用法](#命令行用法)
+- [图形界面用法](#图形界面用法)
+- [项目结构](#项目结构)
+- [平台支持与限制](#平台支持与限制)
+- [移动端使用警告](#移动端使用警告)
+- [免责声明](#免责声明)
 
-- 语言：Go 1.22+
-- GUI：WebView（`github.com/webview/webview_go`，HTML/CSS/JS 渲染）
-- 依赖：`golang.org/x/net`（ICMP）、`golang.org/x/sync`、`golang.org/x/sys`
+---
 
-## 目录结构
+## 功能概览
 
+### 1. 主机发现与端口扫描
+
+| 功能 | 说明 |
+|------|------|
+| 主机发现 | 同网段用 ARP（最可靠）、跨网段用 ICMP、无权限时回退 TCP |
+| TCP Connect 扫描 | 全连接，跨平台可用 |
+| TCP SYN 半开扫描 | 需 Linux + root |
+| UDP 扫描 | 通过 ICMP 端口不可达报文判断 |
+| FIN / NULL / Xmas / ACK | raw socket，需 Linux + root |
+| 定时模板 | T0（偏执）~ T5（疯狂），自动推导超时与并发 |
+| 速率限制 / 随机端口 | `--rate` / `--randomize` |
+
+### 2. 指纹与识别
+
+| 功能 | 说明 |
+|------|------|
+| 服务/版本识别 | 40+ 服务指纹 + 主动探针（SSH、FTP、HTTP、MySQL、Redis、MongoDB 等） |
+| 操作系统识别 | 基于 TTL + 开放端口特征启发式判断 |
+| CMS/Web 指纹 | 识别 WordPress、Discuz、ThinkPHP、DedeCMS、Joomla、Drupal、Laravel、Shiro、Spring Boot、Tomcat、Nginx、IIS 等 |
+
+### 3. 漏洞检测（POC）
+
+对常见高危服务发送轻量探测包（1-2 个包、2 秒超时），判定未授权访问风险：
+
+Redis、MongoDB、Elasticsearch、Docker API、Jenkins、Nacos、Memcached、CouchDB、etcd、Consul、Hadoop YARN。
+
+### 4. Web 侦察
+
+| 功能 | 说明 |
+|------|------|
+| 目录/文件爆破 | dirsearch 式，内置 180+ 常见路径字典 |
+| HTTP 安全头检查 | 检查 X-Frame-Options、CSP、HSTS 缺失与 Server 泄露 |
+| 子域名爆破 | 内置 130+ 字典，支持 BFS 递归深度 + 反向 DNS |
+| Whois / DNS 查询 | 域名注册信息 / A、CNAME、MX、NS、TXT 记录 |
+
+### 5. 其他
+
+| 功能 | 说明 |
+|------|------|
+| 路由跟踪 | `-tr`（traceroute） |
+| Ping 测延迟 | `-sp` |
+| Banner 抓取 | `--banner` |
+| 多格式输出 | 普通文本、JSON、XML、grepable、CSV、**HTML 报告** |
+| 代理扫描 | `--proxy socks5://` / `http://` |
+| 定时扫描 + 变更监控 | `--monitor` / `--interval`，输出新增/消失项，退出码 10=有变化 |
+| 快速命中即停 | `--stop-after-host` |
+| 目标上限保护 | `--max-targets`，防误扫大网段导致内存爆炸 |
+| proot 安全降级 | 移动端自动禁用 raw socket 并降并发 |
+
+---
+
+## 快速开始
+
+直接下载 `dist/` 目录下对应平台的编译产物即可运行，无需任何依赖（GUI 除外，见下）。
+
+```bash
+# Windows 64 位
+netscan-windows-x64.exe -target 192.168.1.1 -sT
+
+# Linux 64 位
+./netscan-linux-x64 -target 192.168.1.0/24 -p 80,443 -sV
+
+# 查看版本
+./netscan-windows-x64.exe -version
 ```
-portscanner/
-├── cmd/
-│   ├── cli/                     # 命令行入口(纯 Go, 可交叉编译)
-│   │   └── main.go
-│   └── gui/                     # 图形界面入口
-│       └── main.go
-├── internal/
-│   ├── scanner/                 # 扫描引擎(核心)
-│   │   ├── types.go             # 类型与常量定义
-│   │   ├── targets.go           # 目标解析(IP/CIDR/范围/域名/IPv6)
-│   │   ├── portdb.go            # 端口-服务数据库与端口表达式解析
-│   │   ├── discovery.go         # 主机发现
-│   │   ├── tcpscan.go           # TCP Connect 扫描
-│   │   ├── rawscan_linux.go     # SYN/FIN/NULL/Xmas/ACK(raw socket)
-│   │   ├── rawscan_other.go     # 非 Linux 平台回退
-│   │   ├── udpscan.go           # UDP 扫描
-│   │   ├── service.go           # 服务/版本识别
-│   │   ├── osdetect.go          # 操作系统识别
-│   │   ├── ratelimit.go         # 速率限制
-│   │   ├── localnet.go          # 本机网段/ARP 判断
-│   │   ├── arp_*.go             # ARP 探测(Windows SendARP)
-│   │   ├── scanner.go           # 扫描编排引擎
-│   │   └── refused_*.go         # 跨平台"连接被拒绝"判断
-│   └── webgui/
-│       ├── app.go               # WebView 界面逻辑
-│       └── index.html           # 界面(暗色主题 HTML/CSS/JS)
-├── dist/                        # 编译产物(与源码分离)
-├── build.ps1                    # Windows 构建脚本
-├── build.sh                     # Linux/macOS 构建脚本
-├── go.mod
-└── README.md
-```
 
-## 编译与运行
+> GUI 版本（`netscan-gui-*`）依赖系统 WebView 运行时：Windows 需 WebView2（Win10/11 已预装），Linux 需 WebKitGTK，macOS 系统自带 WebKit。
+
+---
+
+## 编译与安装
 
 ### 前置条件
 
-- Go 1.22 或更高版本
-- GUI 编译需要 C++ 编译器与 WebView 运行时：
-  - **Windows**：MSYS2/MinGW 的 g++，运行时需 **WebView2**（Win10/11 已预装，否则需安装 Microsoft Edge WebView2）
-  - **Linux**：g++ + `libwebkit2gtk-4.0-dev`（Debian/Ubuntu 可用 `sudo apt install g++ libwebkit2gtk-4.0-dev`）
-  - **macOS**：Xcode 命令行工具（系统自带 WebKit）
+- Go 1.22+
+- 仅编译 GUI 才需要 C++ 编译器与 WebView 运行时：
+  - **Windows**：MSYS2/MinGW 的 g++，运行时需 WebView2
+  - **Linux**：g++ + `libwebkit2gtk-4.0-dev`（`sudo apt install g++ libwebkit2gtk-4.0-dev`）
+  - **macOS**：Xcode 命令行工具（自带 WebKit）
 
-### 一键构建（产物输出到 `dist/`，与源码分离）
+### 一键构建
 
-Windows（PowerShell）：
+产物输出到 `dist/`（与源码分离），CLI 交叉编译到 17 个平台/架构。
 
 ```powershell
+# Windows：GUI + CLI（全部平台）
 powershell -ExecutionPolicy Bypass -File build.ps1
-```
 
-Linux / macOS：
+# Windows：仅 CLI（全部平台）
+powershell -ExecutionPolicy Bypass -File buildCLI.ps1
+```
 
 ```bash
+# Linux / macOS：GUI + CLI
 chmod +x build.sh && ./build.sh
+
+# 仅 CLI
+chmod +x buildCLI.sh && ./buildCLI.sh
 ```
-
-脚本会交叉编译 CLI 到 Windows / Linux / macOS / FreeBSD / NetBSD / OpenBSD，并在**当前平台**编译 GUI。
-
-### 产物命名与架构对照
-
-| 文件名后缀 | 架构 | 适用系统 |
-|-----------|------|---------|
-| `-x64`    | 64 位 x86（amd64/x86_64） | 绝大多数现代 PC |
-| `-x86`    | 32 位 x86（386/i686） | 老式 32 位系统 |
-| `-arm64`  | ARM 64 位 | 树莓派 / Apple Silicon / 部分 Windows 设备 |
-
-Windows 用户根据系统位数选择：
-
-- 64 位系统（绝大多数）：`netscan-windows-x64.exe`、`netscan-gui-windows-x64.exe`
-- 32 位系统：`netscan-windows-x86.exe`
 
 ### 手动编译
 
 ```bash
 go mod tidy
 
-# CLI(纯 Go, 任意平台)
+# CLI（纯 Go，可交叉编译到任意平台）
 go build -o netscan ./cmd/cli
 
-# GUI(基于 WebView, 需 C++ 编译器, 仅本机平台)
+# GUI（基于 WebView，仅本机平台）
 go build -ldflags "-H windowsgui" -o netscan-gui ./cmd/gui
 ```
 
-### 测试
+### 运行测试
 
 ```bash
 go test ./...
 ```
 
+---
+
 ## 命令行用法
 
-```bash
-netscan -target 192.168.1.0/24 -p 1-1000 -sT -T4 -sV
+### 参数速查
 
-# 常用参数
--target string    目标(必填): IP/CIDR/范围/域名, 逗号分隔
--p string         端口表达式(默认 1-65535 全端口)
--sT                TCP Connect 扫描
--sS                TCP SYN 半开扫描(需 root)
--sU                UDP 扫描
--sF / -sN / -sX / -sA   FIN / NULL / Xmas / ACK 扫描
--T int            定时模板 0-5(默认 3)
--Pn               跳过主机发现
--sn               仅主机发现
--sV               服务与版本识别
--O                操作系统识别
---rate int        每秒发包数限制(0=不限)
---randomize       随机端口顺序
---exclude-ports   排除端口表达式
--v                详细输出
--sort string      结果排序: port / host / state
---banner          抓取开放端口原始 banner
--sp               仅 ping 测延迟(不扫端口)
--tr               路由跟踪(traceroute)
--tr-max int       路由跟踪最大跳数(默认 30)
---poc             高危端口未授权访问检测
---fp              CMS/Web 指纹识别
---proxy string    代理: socks5://127.0.0.1:1080 或 http://127.0.0.1:8080
---stop-after-host 命中首个存活主机/开放端口后立即停止
---max-targets int 目标 IP 数量上限(默认 10000)
---force-raw       强制使用 raw socket(覆盖 proot 安全降级)
---monitor string  定时扫描监控(与上次结果比对)
---interval string 监控间隔(如 24h), 留空只执行一次
--oN/-oJ/-oX/-oG/-oC/-oH  输出(普通/JSON/XML/grepable/CSV/HTML 报告)
--version          显示版本号
+**扫描相关**
 
-Web 侦察参数：
+| 参数 | 说明 |
+|------|------|
+| `-target` | 目标（必填）：IP / CIDR / 范围 / 域名，逗号分隔 |
+| `-p` | 端口表达式（默认 `1-65535` 全端口） |
+| `-sT` / `-sS` / `-sU` | TCP Connect / SYN / UDP 扫描 |
+| `-sF` / `-sN` / `-sX` / `-sA` | FIN / NULL / Xmas / ACK 扫描 |
+| `-T` | 定时模板 0-5（默认 3） |
+| `-Pn` | 跳过主机发现 |
+| `-sn` | 仅主机发现 |
+| `-sV` | 服务与版本识别 |
+| `-O` | 操作系统识别 |
+| `--rate` | 每秒发包数限制（0=不限） |
+| `--randomize` | 随机端口顺序 |
+| `--exclude-ports` | 排除端口表达式 |
+| `-v` | 详细输出（含关闭/过滤端口） |
 
--dir               目录/文件爆破(dirsearch), 端口用 -p 指定(默认 80)
--sub               子域名爆破
--sub-depth int     子域名爆破递归深度(1-3, 默认 1)
--whois             Whois 查询
--dnsq              DNS 记录查询
--web               HTTP 安全头检查
--https             使用 HTTPS(配合 -dir/-web)
+**识别与检测**
 
-扫描结束后自动输出统计摘要(存活主机数、开放端口数、主机/服务分布)。
+| 参数 | 说明 |
+|------|------|
+| `--poc` | 高危端口未授权访问检测 |
+| `--fp` | CMS/Web 指纹识别 |
+| `--banner` | 抓取开放端口原始 banner |
 
-示例：
+**侦察工具**
+
+| 参数 | 说明 |
+|------|------|
+| `-dir` | 目录爆破（dirsearch），端口用 `-p` 指定（默认 80） |
+| `-sub` / `--sub-depth` | 子域名爆破 / 递归深度（1-3） |
+| `-web` | HTTP 安全头检查 |
+| `-whois` | Whois 查询 |
+| `-dnsq` | DNS 记录查询 |
+| `-https` | 使用 HTTPS（配合 `-dir`/`-web`） |
+| `-tr` / `-tr-max` | 路由跟踪 / 最大跳数 |
+| `-sp` | Ping 测延迟 |
+
+**高级**
+
+| 参数 | 说明 |
+|------|------|
+| `--proxy` | 代理：`socks5://127.0.0.1:1080` 或 `http://127.0.0.1:8080` |
+| `--stop-after-host` | 命中首个存活主机/开放端口后立即停止 |
+| `--max-targets` | 目标 IP 数量上限（默认 10000） |
+| `--force-raw` | 强制使用 raw socket（覆盖 proot 降级） |
+| `--monitor` / `--interval` | 定时扫描监控 / 间隔（如 `24h`） |
+| `-sort` | 结果排序：`port` / `host` / `state` |
+| `-oN/-oJ/-oX/-oG/-oC/-oH` | 输出：普通/JSON/XML/grepable/CSV/HTML 报告 |
+| `-version` | 显示版本号 |
+
+### 示例
 
 ```bash
 # 快速扫描常见端口
@@ -183,63 +205,119 @@ Web 侦察参数：
 # 服务识别 + 输出 JSON
 ./netscan -target 192.168.1.1 -p 80,443,22 -sV -oJ result.json
 
-# 限速隐蔽扫描(每秒 50 包)
+# 限速隐蔽扫描（每秒 50 包）
 ./netscan -target 192.168.1.0/24 -p 22,80,443 -sS --rate 50
 
-# 仅发现存活主机
-./netscan -target 192.168.1.0/24 -sn
+# 高危检测 + CMS 指纹 + HTML 报告
+./netscan -target 192.168.1.1 -sT --poc --fp -oH report.html
 
-# 路由跟踪
-./netscan -target 192.168.1.1 -tr
+# 目录爆破 + Web 头检查
+./netscan -target example.com -p 80 -dir -web
 
-# ping 测延迟
-./netscan -target 192.168.1.1 -sp
-
-# 抓取开放端口 banner
-./netscan -target 192.168.1.1 -p 80,443 -sT --banner
-
-# 扫描并导出 CSV
-./netscan -target 192.168.1.1 -sT -sV -oC result.csv
-
-# 目录爆破(dirsearch)
-./netscan -target 192.168.1.1 -p 80 -dir
-
-# HTTP 安全头检查
-./netscan -target example.com -web
-
-# 子域名爆破
-./netscan -target example.com -sub
-
-# Whois 查询
-./netscan -target example.com -whois
-
-# DNS 记录查询
-./netscan -target example.com -dnsq
+# 定时监控（有变化退出码 10）
+./netscan --monitor example.com -target 192.168.1.0/24 -p 22,80,443 -sT
 ```
+
+扫描结束后自动输出统计摘要（存活主机数、开放端口数、主机/服务分布）。
+
+---
 
 ## 图形界面用法
 
-1. 在「目标」输入框填入扫描目标（IP / CIDR / 范围 / 域名，多个用逗号分隔）。
-2. 在「端口」输入框填入端口表达式（`80`、`1-1000`、`80,443,8080`、`top-1000`、`-`）。
-3. 选择定时模板（T0 到 T5）。
-4. 勾选扫描技术（TCP Connect / TCP SYN / UDP / FIN / NULL / Xmas / ACK）。
-5. 勾选扫描选项（服务识别、版本识别、操作系统识别、跳过主机发现、仅主机发现、反向 DNS）。
-6. 勾选「Web 侦察」选项（目录爆破、Web头检查、子域名爆破、Whois、DNS记录、HTTPS），结果会显示在下方「Web 侦察结果」区域。
-7. 点击「开始扫描」，结果实时显示，可随时「停止」或「导出结果」（CSV）。
+双击 `netscan-gui-*` 启动，界面分左右两栏：
 
-## 平台限制说明
+**左栏（配置）**
 
-- **TCP SYN / FIN / NULL / Xmas / ACK** 等基于 raw socket 的扫描技术需要 Linux 系统并以 root 权限运行；在 Windows 等平台会自动回退为 TCP Connect 扫描。
-- **UDP 扫描**依赖 ICMP 报文监听，通常需要管理员/root 权限。
-- 服务识别与版本识别仅对 TCP 开放端口进行。
+- **扫描目标**：目标、端口、定时模板
+- **扫描技术**：TCP Connect / SYN / UDP / FIN / NULL / Xmas / ACK
+- **扫描选项**：服务识别、版本识别、OS 识别、跳过主机发现、仅主机发现、反向 DNS、高危检测（POC）、CMS 指纹、Banner 抓取、命中即停
+- **高级选项**：代理、速率限制、排除端口、结果排序
+- **Web 侦察**：目录爆破、Web 头检查、子域名爆破（含深度）、Whois、DNS 记录、HTTPS
 
-## 移动端使用警告（Termux / proot）
+**右栏（结果）**
 
-- 在 Termux / proot 等受限移动环境下，raw socket 通常不可用，大量并发会导致设备卡死或崩溃。
-- 本工具会**自动检测** proot/Termux 环境并**安全降级**：禁用 raw socket 扫描技术、把并发数限制到 100 以下、把发包速率限制到 500/s。
-- 如需强制使用 raw socket，可加 `--force-raw`（风险自负）。
-- 建议在移动端使用 TCP Connect 扫描，并把端口范围缩小到 `top-1000` 或更小，避免设备过载。
+- **扫描结果**：实时表格展示，高危风险以红色 `⚠高危` 标记（悬停看详情）
+- **操作按钮**：开始扫描 / 停止 / 导出 CSV / 导出 HTML 报告 / 路由跟踪 / Ping
+- **Web 侦察结果**：侦察输出显示区
+
+---
+
+## 项目结构
+
+```
+portscanner/
+├── cmd/
+│   ├── cli/main.go              # CLI 入口（纯 Go，可交叉编译）
+│   └── gui/main.go              # GUI 入口
+├── internal/
+│   ├── scanner/                 # 扫描引擎（核心，纯 Go）
+│   │   ├── types.go             # 类型与常量
+│   │   ├── targets.go           # 目标解析（IP/CIDR/范围/域名/IPv6）
+│   │   ├── portdb.go            # 端口-服务数据库与端口表达式
+│   │   ├── discovery.go         # 主机发现（ARP/ICMP/TCP）
+│   │   ├── tcpscan.go           # TCP Connect 扫描 + banner
+│   │   ├── rawscan_linux.go     # SYN/FIN/NULL/Xmas/ACK（raw socket）
+│   │   ├── udpscan.go           # UDP 扫描
+│   │   ├── service.go           # 服务/版本识别
+│   │   ├── osdetect.go          # OS 识别
+│   │   ├── fingerprint.go       # CMS/Web 指纹识别
+│   │   ├── poc.go               # 高危未授权访问检测
+│   │   ├── webscan.go           # 目录爆破 / 头检查 / 子域名爆破
+│   │   ├── recon.go             # Whois / DNS 记录
+│   │   ├── extras.go            # Ping / 路由跟踪 / Banner
+│   │   ├── report.go            # HTML 报告生成
+│   │   ├── monitor.go           # 定时扫描 + 变更监控
+│   │   ├── proxy.go             # 代理连接
+│   │   ├── proot.go             # proot 安全降级
+│   │   ├── ratelimit.go         # 速率限制
+│   │   ├── localnet.go          # 本机网段/ARP 判断
+│   │   ├── scanner.go           # 扫描编排引擎
+│   │   └── *_linux.go/*_windows.go/*_other.go   # 平台相关实现
+│   └── webgui/                  # 图形界面
+│       ├── app.go               # WebView 界面逻辑
+│       └── index.html           # 界面（暗色主题 HTML/CSS/JS）
+├── dist/                        # 编译产物（与源码分离）
+├── build.ps1 / build.sh         # 全量构建（GUI + CLI）
+├── buildCLI.ps1 / buildCLI.sh   # 仅构建 CLI
+├── go.mod
+├── README.md
+└── RELEASE_NOTES.md
+```
+
+---
+
+## 平台支持与限制
+
+### 产物命名与架构
+
+| 后缀 | 架构 | 适用系统 |
+|------|------|---------|
+| `-x64` | 64 位 x86（amd64） | 绝大多数现代 PC |
+| `-x86` | 32 位 x86（386） | 老式 32 位系统 |
+| `-arm64` | ARM 64 位（AArch64） | 树莓派 / Apple Silicon / 部分 Windows 设备 |
+
+CLI 已交叉编译覆盖：Windows / Linux / macOS / FreeBSD / NetBSD / OpenBSD × x64 / x86 / arm64（macOS 无 x86）。
+
+### 功能限制
+
+- **TCP SYN / FIN / NULL / Xmas / ACK** 需要 Linux + root；Windows 等平台自动回退为 TCP Connect。
+- **UDP 扫描**依赖 ICMP 报文监听，需管理员/root 权限。
+- **代理扫描**仅对 TCP 连接与 HTTP 请求生效，raw socket 扫描不支持代理。
+- **服务/版本识别**仅对 TCP 开放端口进行。
+
+---
+
+## 移动端使用警告
+
+在 **Termux / proot** 等受限移动环境中：
+
+- raw socket 通常不可用，大量并发会导致设备卡死或崩溃。
+- 本工具会**自动检测** proot/Termux 环境并**安全降级**：禁用 raw socket、并发限制到 100 以下、发包速率限制到 500/s。
+- 如需强制 raw socket，加 `--force-raw`（风险自负）。
+- 建议移动端用 TCP Connect 扫描，并把端口范围缩小到 `top-1000` 或更小。
+
+---
 
 ## 免责声明
 
-本工具仅供网络管理员进行授权的安全评估与网络诊断使用。请勿在未获得授权的情况下对他人网络进行扫描。
+本工具仅供网络管理员进行授权的安全评估与网络诊断使用。请勿在未获得授权的情况下对他人网络进行扫描，否则可能触犯法律。使用者须自行承担全部责任。

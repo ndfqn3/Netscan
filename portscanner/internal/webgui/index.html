@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NetScan</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --bg2: #111827;
+    --card: #151c2b;
+    --card2: #1a2333;
+    --border: #22304a;
+    --text: #e5e9f0;
+    --muted: #8b98ab;
+    --accent: #3b82f6;
+    --accent2: #22d3ee;
+    --green: #34d399;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --purple: #a78bfa;
+    --gray: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: radial-gradient(1200px 600px at 80% -10%, #14203a 0%, var(--bg) 55%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px 24px 40px;
+  }
+  header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 18px; }
+  header h1 {
+    font-size: 28px; font-weight: 700; letter-spacing: .5px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header p { color: var(--muted); font-size: 13px; }
+
+  main { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+
+  .card {
+    background: linear-gradient(180deg, var(--card) 0%, var(--card2) 100%);
+    border: 1px solid var(--border); border-radius: 14px; padding: 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  }
+  .card h2 {
+    font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .card h2::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  input, select, textarea {
+    width: 100%; background: var(--bg2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 9px 11px; font-size: 13px;
+    outline: none; transition: border-color .15s, box-shadow .15s;
+    font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,.18);
+  }
+  textarea { resize: vertical; min-height: 54px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { position: relative; }
+  .chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .chip span {
+    display: inline-block; padding: 6px 12px; border-radius: 20px; cursor: pointer;
+    border: 1px solid var(--border); color: var(--muted); font-size: 12px;
+    transition: all .15s; user-select: none; background: var(--bg2);
+  }
+  .chip input:checked + span {
+    background: linear-gradient(135deg, var(--accent), #2563eb);
+    border-color: transparent; color: #fff; box-shadow: 0 2px 10px rgba(59,130,246,.4);
+  }
+  .chip input:disabled + span { opacity: .4; cursor: not-allowed; }
+
+  .actions { display: flex; align-items: center; gap: 10px; margin: 14px 0; flex-wrap: wrap; }
+  button {
+    border: none; border-radius: 9px; padding: 10px 18px; font-size: 13px; cursor: pointer;
+    color: var(--text); background: var(--card2); border: 1px solid var(--border);
+    transition: all .15s; font-family: inherit; display: inline-flex; align-items: center; gap: 6px;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary {
+    background: linear-gradient(135deg, var(--accent), #2563eb); border: none; color: #fff;
+    box-shadow: 0 4px 14px rgba(59,130,246,.4); font-weight: 600;
+  }
+  button.primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(59,130,246,.55); transform: translateY(-1px); }
+  button.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+
+  #status { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+  .progress { height: 6px; background: var(--bg2); border-radius: 4px; overflow: hidden; margin-bottom: 14px; }
+  .progress .fill {
+    height: 100%; width: 0%; border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width .25s ease;
+  }
+
+  .result-card { grid-column: 2; }
+  @media (max-width: 900px) { .result-card { grid-column: 1; } }
+
+  .table-wrap { overflow: auto; max-height: 62vh; border-radius: 8px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    position: sticky; top: 0; background: var(--card2); z-index: 2;
+    text-align: left; padding: 10px 12px; font-size: 12px; color: var(--muted);
+    border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: .5px;
+    font-weight: 600; white-space: nowrap;
+  }
+  tbody td { padding: 8px 12px; border-bottom: 1px solid rgba(34,48,74,.6); white-space: nowrap; }
+  tbody tr:nth-child(even) { background: rgba(255,255,255,.015); }
+  tbody tr:hover { background: rgba(59,130,246,.07); }
+  .mono { font-family: "JetBrains Mono", "Consolas", monospace; }
+
+  .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+  .badge.open { background: rgba(52,211,153,.15); color: var(--green); }
+  .badge.closed { background: rgba(248,113,113,.15); color: var(--red); }
+  .badge.filtered { background: rgba(251,191,36,.15); color: var(--amber); }
+  .badge.up { background: rgba(59,130,246,.15); color: var(--accent); }
+  .badge.down { background: rgba(100,116,139,.2); color: var(--gray); }
+  .badge.openfiltered { background: rgba(167,139,250,.15); color: var(--purple); }
+  .badge.unfiltered { background: rgba(34,211,238,.15); color: var(--accent2); }
+
+  .empty { padding: 40px; text-align: center; color: var(--muted); font-size: 13px; }
+  .recon-out {
+    font-family: "JetBrains Mono", "Consolas", monospace;
+    font-size: 12px; line-height: 1.5; color: var(--text);
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  .svc { color: var(--accent2); }
+  .ver { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>NetScan</h1>
+  <p>网络扫描器 · 主机发现 · 端口扫描 · 服务识别 · 操作系统识别</p>
+</header>
+
+<main>
+  <div>
+    <section class="card">
+      <h2>扫描目标</h2>
+      <div class="field">
+        <label>目标地址</label>
+        <textarea id="targets" placeholder="192.168.1.0/24 、192.168.1.1-50 、example.com（逗号分隔多个）"></textarea>
+      </div>
+      <div class="field">
+        <label>端口</label>
+        <input id="ports" value="1-65535" placeholder="1-1000 / 80,443 / top-1000 / -">
+      </div>
+      <div class="field">
+        <label>定时模板</label>
+        <select id="timing">
+          <option value="0">T0 偏执（最隐蔽）</option>
+          <option value="1">T1 隐秘</option>
+          <option value="2">T2 礼貌</option>
+          <option value="3" selected>T3 常规</option>
+          <option value="4">T4 激进</option>
+          <option value="5">T5 疯狂（最快）</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <h2>扫描技术</h2>
+      <div class="chips">
+        <label class="chip"><input type="checkbox" class="st" value="tcp-connect" checked><span>TCP Connect</span></label>
+        <label class="chip"><input type="checkbox" class="st" value="tcp-syn"><span>TCP SYN</span></label>
+        <label class="chip"><input type="checkbox" class="st" value="udp"><span>UDP</span></label>
+        <label class="chip"><input type="checkbox" class="st" value="fin"><span>FIN</span></label>
+        <label class="chip"><input type="checkbox" class="st" value="null"><span>NULL</span></label>
+        <label class="chip"><input type="checkbox" class="st" value="xmas"><span>Xmas</span></label>
+        <label class="chip"><input type="checkbox" class="st" value="ack"><span>ACK</span></label>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <h2>扫描选项</h2>
+      <div class="chips">
+        <label class="chip"><input type="checkbox" id="svc" checked><span>服务识别</span></label>
+        <label class="chip"><input type="checkbox" id="ver" checked><span>版本识别</span></label>
+        <label class="chip"><input type="checkbox" id="os" checked><span>操作系统识别</span></label>
+        <label class="chip"><input type="checkbox" id="nodisc"><span>跳过主机发现</span></label>
+        <label class="chip"><input type="checkbox" id="disconly"><span>仅主机发现</span></label>
+        <label class="chip"><input type="checkbox" id="dns"><span>反向DNS解析</span></label>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <h2>Web 侦察</h2>
+      <div class="chips">
+        <label class="chip"><input type="checkbox" id="dir"><span>目录爆破</span></label>
+        <label class="chip"><input type="checkbox" id="webcheck"><span>Web头检查</span></label>
+        <label class="chip"><input type="checkbox" id="sub"><span>子域名爆破</span></label>
+        <label class="chip"><input type="checkbox" id="whois"><span>Whois</span></label>
+        <label class="chip"><input type="checkbox" id="dnsq"><span>DNS记录</span></label>
+        <label class="chip"><input type="checkbox" id="https"><span>HTTPS</span></label>
+      </div>
+    </section>
+  </div>
+
+  <section class="card result-card">
+    <h2>扫描结果 <span id="count" style="color:var(--accent)"></span></h2>
+    <div class="actions">
+      <button id="start" class="primary">▶ 开始扫描</button>
+      <button id="stop" class="danger">■ 停止</button>
+      <button id="export">⇩ 导出CSV</button>
+      <span id="status">就绪</span>
+    </div>
+    <div class="progress"><div class="fill" id="pfill"></div></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>IP 地址</th><th>主机名</th><th>端口</th><th>协议</th><th>状态</th><th>服务</th><th>版本</th><th>操作系统</th></tr>
+        </thead>
+        <tbody id="results"></tbody>
+      </table>
+      <div id="empty" class="empty">暂无结果，输入目标后点击「开始扫描」</div>
+    </div>
+  </section>
+
+  <section class="card result-card" style="margin-top:16px">
+    <h2>Web 侦察结果</h2>
+    <div id="recon" class="recon-out">（勾选左侧「Web 侦察」选项后，结果将显示在这里）</div>
+  </section>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const results = [];
+  const stateMap = {
+    'open': ['open', '开放'],
+    'closed': ['closed', '关闭'],
+    'filtered': ['filtered', '过滤'],
+    'open|filtered': ['openfiltered', '开放/过滤'],
+    'unfiltered': ['unfiltered', '未过滤'],
+    'up': ['up', '存活'],
+    'down': ['down', '离线'],
+    'os': ['up', '系统'],
+  };
+
+  function esc(s) {
+    if (s === undefined || s === null) return '';
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function badge(state) {
+    const [cls, label] = stateMap[state] || ['', state];
+    return `<span class="badge ${cls}">${esc(label)}</span>`;
+  }
+
+  window.addResult = function(r) {
+    results.push(r);
+    const tbody = $('results');
+    if (r.state === 'up') {
+      tbody.insertAdjacentHTML('beforeend',
+        `<tr><td class="mono">${esc(r.ip)}</td><td></td><td colspan="2">—</td>` +
+        `<td>${badge('up')}</td><td class="svc">主机存活</td><td class="ver"></td><td></td></tr>`);
+    } else if (r.state === 'down') {
+      tbody.insertAdjacentHTML('beforeend',
+        `<tr><td class="mono">${esc(r.ip)}</td><td></td><td colspan="2">—</td>` +
+        `<td>${badge('down')}</td><td class="ver">主机离线</td><td class="ver"></td><td></td></tr>`);
+    } else if (r.state === 'os') {
+      tbody.insertAdjacentHTML('beforeend',
+        `<tr><td class="mono">${esc(r.ip)}</td><td></td><td colspan="2">—</td>` +
+        `<td>${badge('os')}</td><td class="svc">操作系统</td><td class="ver">${esc(r.version)}</td><td class="ver">${esc(r.os)}</td></tr>`);
+    } else {
+      tbody.insertAdjacentHTML('beforeend',
+        `<tr><td class="mono">${esc(r.ip)}</td><td>${esc(r.hostname)}</td><td class="mono">${r.port}</td>` +
+        `<td>${esc(r.protocol)}</td><td>${badge(r.state)}</td>` +
+        `<td class="svc">${esc(r.service)}</td><td class="ver">${esc(r.version)}</td><td class="ver">${esc(r.os)}</td></tr>`);
+    }
+    const empty = $('empty'); if (empty) empty.style.display = 'none';
+    $('count').textContent = `(${results.length})`;
+    $('results').scrollTop = $('results').scrollHeight;
+  };
+
+  window.onProgress = function(p) {
+    const pct = Math.min(100, Math.max(0, p.Percent || 0));
+    $('pfill').style.width = pct + '%';
+    if (p.Message) {
+      $('status').textContent = `${p.Message} — 主机 ${p.ScannedHost||0}/${p.TotalHosts||0} · 端口 ${p.ScannedPort||0}/${(p.TotalHosts||0)*(p.TotalPorts||0)} (${pct.toFixed(1)}%)`;
+    }
+  };
+
+  window.onScanDone = function(msg) {
+    $('start').disabled = false;
+    $('stop').disabled = true;
+    $('pfill').style.width = '100%';
+    const open = results.filter(r => r.state === 'open');
+    const upHosts = new Set(results.filter(r => r.state === 'up').map(r => r.ip)).size;
+    const openHosts = new Set(open.map(r => r.ip)).size;
+    $('status').textContent = `${msg} · 存活主机 ${upHosts} · 有端口主机 ${openHosts} · 开放端口 ${open.length}`;
+  };
+
+  window.addRecon = function(line) {
+    const el = $('recon');
+    if (el.dataset.empty === '1') { el.textContent = ''; el.dataset.empty = '0'; }
+    el.textContent += line + '\n';
+    el.scrollTop = el.scrollHeight;
+  };
+
+  function collect() {
+    return {
+      targets: $('targets').value.split(/[,\s;]+/).filter(Boolean),
+      ports: $('ports').value || '1-65535',
+      scan_types: [...document.querySelectorAll('.st:checked')].map(c => c.value),
+      timing: parseInt($('timing').value, 10),
+      skip_discovery: $('nodisc').checked,
+      discovery_only: $('disconly').checked,
+      service_detect: $('svc').checked,
+      version_detect: $('ver').checked,
+      os_detect: $('os').checked,
+      resolve_dns: $('dns').checked,
+      dir_search: $('dir').checked,
+      web_check: $('webcheck').checked,
+      sub_brute: $('sub').checked,
+      whois: $('whois').checked,
+      dns_records: $('dnsq').checked,
+      use_https: $('https').checked,
+    };
+  }
+
+  $('disconly').addEventListener('change', function() {
+    const on = this.checked;
+    ['ports','timing'].forEach(id => $(id).disabled = on);
+    document.querySelectorAll('.st').forEach(c => c.disabled = on);
+    ['svc','ver','os','dns'].forEach(id => $(id).disabled = on);
+  });
+
+  $('start').addEventListener('click', async function() {
+    const o = collect();
+    if (o.targets.length === 0) { $('status').textContent = '请输入扫描目标'; return; }
+    $('results').innerHTML = '';
+    results.length = 0;
+    $('count').textContent = '';
+    $('pfill').style.width = '0%';
+    $('empty').style.display = 'none';
+    $('recon').textContent = '';
+    $('recon').dataset.empty = '1';
+    $('start').disabled = true;
+    $('stop').disabled = false;
+    $('status').textContent = '正在启动扫描...';
+    try {
+      await window.startScan(JSON.stringify(o));
+    } catch (e) {
+      $('status').textContent = '错误: ' + e;
+      $('start').disabled = false;
+      $('stop').disabled = true;
+    }
+  });
+
+  $('stop').addEventListener('click', function() {
+    window.stopScan();
+    $('status').textContent = '正在停止...';
+  });
+
+  $('export').addEventListener('click', function() {
+    if (results.length === 0) { $('status').textContent = '无结果可导出'; return; }
+    const lines = ['IP地址,主机名,端口,协议,状态,服务,版本,操作系统'];
+    for (const r of results) {
+      lines.push([r.ip, r.hostname||'', r.port||'', r.protocol||'', r.state, r.service||'', r.version||'', r.os||''].join(','));
+    }
+    const csv = '\uFEFF' + lines.join('\r\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'netscan_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    $('status').textContent = '已导出 ' + results.length + ' 条结果';
+  });
+
+  window.addEventListener('load', function() {
+    const empty = document.createElement('div');
+    empty.id = 'empty'; empty.className = 'empty';
+    empty.textContent = '暂无结果，输入目标后点击「开始扫描」';
+  });
+</script>
+</body>
+</html>

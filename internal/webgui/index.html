@@ -6,148 +6,269 @@
 <title>NetScan</title>
 <style>
   :root {
-    --bg: #0b0f17;
-    --bg2: #111827;
-    --card: #151c2b;
-    --card2: #1a2333;
-    --border: #22304a;
-    --text: #e5e9f0;
-    --muted: #8b98ab;
-    --accent: #3b82f6;
-    --accent2: #22d3ee;
-    --green: #34d399;
-    --red: #f87171;
-    --amber: #fbbf24;
-    --purple: #a78bfa;
-    --gray: #64748b;
+    --bg: #070b14;
+    --bg2: #0d1420;
+    --card: #111a2b;
+    --card2: #16203a;
+    --border: #1f2b45;
+    --border2: #2a3a5e;
+    --text: #e8edf6;
+    --muted: #93a1bb;
+    --accent: #5b8cff;
+    --accent2: #37d5f2;
+    --violet: #a78bfa;
+    --green: #35e0a1;
+    --red: #ff7b8a;
+    --amber: #ffc555;
+    --purple: #c4a6ff;
+    --gray: #7a89a5;
+    --glow: rgba(91, 140, 255, .35);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scrollbar-color: #2a3a5e transparent; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #253454; border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: #2f4470; }
+
   body {
     font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
-    background: radial-gradient(1200px 600px at 80% -10%, #14203a 0%, var(--bg) 55%);
+    background:
+      radial-gradient(900px 500px at 85% -10%, rgba(91,140,255,.16) 0%, transparent 55%),
+      radial-gradient(700px 400px at -10% 30%, rgba(167,139,250,.10) 0%, transparent 50%),
+      radial-gradient(1000px 700px at 50% 120%, rgba(55,213,242,.06) 0%, transparent 55%),
+      var(--bg);
+    background-attachment: fixed;
     color: var(--text);
-    min-height: 100vh;
-    padding: 20px 24px 40px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 24px 16px;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
   }
-  header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 18px; }
-  header h1 {
-    font-size: 28px; font-weight: 700; letter-spacing: .5px;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
-  header p { color: var(--muted); font-size: 13px; }
 
-  main { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  header {
+    display: flex; align-items: center; gap: 16px; margin-bottom: 18px;
+    padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 30px; font-weight: 800; letter-spacing: .3px;
+    background: linear-gradient(120deg, #7da7ff, #37d5f2 60%, #a78bfa);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 40px rgba(91,140,255,.25);
+  }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header .logo-dot {
+    width: 12px; height: 12px; border-radius: 50%; flex: none;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    box-shadow: 0 0 14px var(--glow);
+    animation: logoPulse 2.5s ease-in-out infinite;
+  }
+  @keyframes logoPulse { 0%,100% { box-shadow: 0 0 8px var(--glow); } 50% { box-shadow: 0 0 22px var(--glow); } }
+
+  main { flex: 1; min-height: 0; display: grid; gap: 16px; grid-template-columns: 1fr; }
+  #tab-scan { grid-template-columns: 330px 1fr; }
+  #tab-exploit { grid-template-columns: 1fr 1fr; align-items: start; overflow-y: auto; }
+  #tab-assets { overflow-y: auto; }
+  .left-col { display: flex; flex-direction: column; gap: 13px; min-width: 0; overflow-y: auto; padding-right: 4px; }
+  .right-col { grid-column: 2; display: flex; flex-direction: column; gap: 13px; min-width: 0; min-height: 0; }
+  @media (max-width: 900px) {
+    #tab-scan, #tab-exploit { grid-template-columns: 1fr; }
+    .right-col { grid-column: 1; }
+  }
 
   .card {
-    background: linear-gradient(180deg, var(--card) 0%, var(--card2) 100%);
-    border: 1px solid var(--border); border-radius: 14px; padding: 16px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    background: linear-gradient(160deg, rgba(22,32,58,.9) 0%, rgba(17,26,43,.92) 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px 18px;
+    box-shadow: 0 6px 28px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.03);
+    backdrop-filter: blur(6px);
+    transition: border-color .2s;
   }
+  .card:hover { border-color: var(--border2); }
   .card h2 {
-    font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
-    color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px;
+    color: var(--muted); margin-bottom: 14px; display: flex; align-items: center; gap: 9px;
   }
-  .card h2::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+  .card h2::before {
+    content: ""; width: 4px; height: 15px; border-radius: 3px;
+    background: linear-gradient(180deg, var(--accent), var(--accent2));
+    box-shadow: 0 0 10px var(--glow);
+  }
 
-  .field { margin-bottom: 12px; }
-  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .field { margin-bottom: 13px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
   input, select, textarea {
-    width: 100%; background: var(--bg2); border: 1px solid var(--border);
-    color: var(--text); border-radius: 8px; padding: 9px 11px; font-size: 13px;
-    outline: none; transition: border-color .15s, box-shadow .15s;
+    width: 100%; background: rgba(10,16,28,.8); border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px; padding: 9px 12px; font-size: 13px;
+    outline: none; transition: border-color .18s, box-shadow .18s, background .18s;
     font-family: inherit;
   }
+  input:hover, select:hover, textarea:hover { border-color: var(--border2); }
   input:focus, select:focus, textarea:focus {
-    border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,.18);
+    border-color: var(--accent); background: rgba(10,16,28,.95);
+    box-shadow: 0 0 0 3px rgba(91,140,255,.16);
   }
+  input::placeholder, textarea::placeholder { color: #5b6b88; }
   textarea { resize: vertical; min-height: 54px; }
 
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip { position: relative; }
   .chip input { position: absolute; opacity: 0; pointer-events: none; }
   .chip span {
-    display: inline-block; padding: 6px 12px; border-radius: 20px; cursor: pointer;
+    display: inline-block; padding: 6px 13px; border-radius: 20px; cursor: pointer;
     border: 1px solid var(--border); color: var(--muted); font-size: 12px;
-    transition: all .15s; user-select: none; background: var(--bg2);
+    transition: all .16s; user-select: none; background: rgba(13,20,32,.7);
   }
+  .chip span:hover { border-color: var(--border2); color: var(--text); }
   .chip input:checked + span {
-    background: linear-gradient(135deg, var(--accent), #2563eb);
-    border-color: transparent; color: #fff; box-shadow: 0 2px 10px rgba(59,130,246,.4);
+    background: linear-gradient(135deg, var(--accent), #4f6bff);
+    border-color: transparent; color: #fff; box-shadow: 0 3px 14px var(--glow);
   }
   .chip input:disabled + span { opacity: .4; cursor: not-allowed; }
 
-  .actions { display: flex; align-items: center; gap: 10px; margin: 14px 0; flex-wrap: wrap; }
+  .actions { display: flex; align-items: center; gap: 9px; margin: 15px 0; flex-wrap: wrap; }
   button {
-    border: none; border-radius: 9px; padding: 10px 18px; font-size: 13px; cursor: pointer;
-    color: var(--text); background: var(--card2); border: 1px solid var(--border);
-    transition: all .15s; font-family: inherit; display: inline-flex; align-items: center; gap: 6px;
+    border: none; border-radius: 10px; padding: 10px 17px; font-size: 13px; cursor: pointer;
+    color: var(--text); background: rgba(22,32,58,.7); border: 1px solid var(--border);
+    transition: all .16s; font-family: inherit; display: inline-flex; align-items: center; gap: 6px;
   }
-  button:hover:not(:disabled) { border-color: var(--accent); }
-  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
+  button:active:not(:disabled) { transform: translateY(0); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
   button.primary {
-    background: linear-gradient(135deg, var(--accent), #2563eb); border: none; color: #fff;
-    box-shadow: 0 4px 14px rgba(59,130,246,.4); font-weight: 600;
+    background: linear-gradient(135deg, var(--accent), #4f6bff); border: none; color: #fff;
+    box-shadow: 0 4px 16px var(--glow); font-weight: 700;
+    animation: breathe 2.6s ease-in-out infinite;
   }
-  button.primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(59,130,246,.55); transform: translateY(-1px); }
+  @keyframes breathe { 0%,100% { box-shadow: 0 4px 14px var(--glow); } 50% { box-shadow: 0 4px 26px rgba(91,140,255,.55); } }
+  button.primary:hover:not(:disabled) { box-shadow: 0 7px 24px rgba(91,140,255,.6); }
+  button.danger { background: rgba(255,123,138,.08); border-color: rgba(255,123,138,.3); }
   button.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
 
   #status { color: var(--muted); font-size: 12px; margin-left: auto; }
 
-  .progress { height: 6px; background: var(--bg2); border-radius: 4px; overflow: hidden; margin-bottom: 14px; }
+  .progress { height: 7px; background: var(--bg2); border-radius: 5px; overflow: hidden; margin-bottom: 15px; border: 1px solid var(--border); }
   .progress .fill {
-    height: 100%; width: 0%; border-radius: 4px;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    transition: width .25s ease;
+    height: 100%; width: 0%; border-radius: 5px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--violet));
+    background-size: 200% 100%; animation: flow 2s linear infinite;
+    transition: width .3s ease;
   }
+  @keyframes flow { 0% { background-position: 0 0; } 100% { background-position: 200% 0; } }
 
-  .result-card { grid-column: 2; }
-  @media (max-width: 900px) { .result-card { grid-column: 1; } }
+  .result-card { min-height: 0; display: flex; flex-direction: column; }
+  .result-card.grow { flex: 1; }
+  .result-card.grow .table-wrap { flex: 1; min-height: 0; }
 
-  .table-wrap { overflow: auto; max-height: 62vh; border-radius: 8px; border: 1px solid var(--border); }
+  .table-wrap {
+    overflow: auto; max-height: none; border-radius: 12px; border: 1px solid var(--border);
+    background: rgba(10,16,28,.55);
+  }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   thead th {
-    position: sticky; top: 0; background: var(--card2); z-index: 2;
-    text-align: left; padding: 10px 12px; font-size: 12px; color: var(--muted);
-    border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: .5px;
-    font-weight: 600; white-space: nowrap;
+    position: sticky; top: 0; background: #16203a; z-index: 2;
+    text-align: left; padding: 11px 13px; font-size: 11px; color: var(--muted);
+    border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: .6px;
+    font-weight: 700; white-space: nowrap;
   }
-  tbody td { padding: 8px 12px; border-bottom: 1px solid rgba(34,48,74,.6); white-space: nowrap; }
+  tbody td { padding: 9px 13px; border-bottom: 1px solid rgba(31,43,69,.5); white-space: nowrap; animation: fadeIn .25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
   tbody tr:nth-child(even) { background: rgba(255,255,255,.015); }
-  tbody tr:hover { background: rgba(59,130,246,.07); }
-  .mono { font-family: "JetBrains Mono", "Consolas", monospace; }
+  tbody tr { transition: background .12s; }
+  tbody tr:hover { background: rgba(91,140,255,.08); }
+  .mono { font-family: "JetBrains Mono", "Consolas", "SF Mono", monospace; }
 
-  .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 600; }
-  .badge.open { background: rgba(52,211,153,.15); color: var(--green); }
-  .badge.closed { background: rgba(248,113,113,.15); color: var(--red); }
-  .badge.filtered { background: rgba(251,191,36,.15); color: var(--amber); }
-  .badge.up { background: rgba(59,130,246,.15); color: var(--accent); }
-  .badge.down { background: rgba(100,116,139,.2); color: var(--gray); }
-  .badge.openfiltered { background: rgba(167,139,250,.15); color: var(--purple); }
-  .badge.unfiltered { background: rgba(34,211,238,.15); color: var(--accent2); }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 7px; font-size: 11px; font-weight: 700; letter-spacing: .2px; }
+  .badge.open { background: rgba(53,224,161,.14); color: var(--green); box-shadow: inset 0 0 0 1px rgba(53,224,161,.25); }
+  .badge.closed { background: rgba(255,123,138,.14); color: var(--red); box-shadow: inset 0 0 0 1px rgba(255,123,138,.25); }
+  .badge.filtered { background: rgba(255,197,85,.14); color: var(--amber); box-shadow: inset 0 0 0 1px rgba(255,197,85,.25); }
+  .badge.up { background: rgba(91,140,255,.14); color: var(--accent); box-shadow: inset 0 0 0 1px rgba(91,140,255,.25); }
+  .badge.down { background: rgba(122,137,165,.16); color: var(--gray); box-shadow: inset 0 0 0 1px rgba(122,137,165,.25); }
+  .badge.openfiltered { background: rgba(196,166,255,.14); color: var(--purple); box-shadow: inset 0 0 0 1px rgba(196,166,255,.25); }
+  .badge.unfiltered { background: rgba(55,213,242,.14); color: var(--accent2); box-shadow: inset 0 0 0 1px rgba(55,213,242,.25); }
 
-  .empty { padding: 40px; text-align: center; color: var(--muted); font-size: 13px; }
+  .empty { padding: 44px; text-align: center; color: var(--muted); font-size: 13px; }
+  .empty::before { content: "🔍"; display: block; font-size: 30px; margin-bottom: 10px; opacity: .5; }
+
   .recon-out {
     font-family: "JetBrains Mono", "Consolas", monospace;
-    font-size: 12px; line-height: 1.5; color: var(--text);
-    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
-    padding: 12px; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+    font-size: 12px; line-height: 1.55; color: #c7d2e4;
+    background: rgba(10,16,28,.7); border: 1px solid var(--border); border-radius: 10px;
+    padding: 13px; max-height: 270px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  pre.recon-out { margin: 0; }
+
+  .shell-term {
+    font-family: "JetBrains Mono", "Consolas", monospace;
+    font-size: 13px; line-height: 1.55; color: #b6f0cd;
+    background: #03060c; border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; height: 400px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+  .tab {
+    background: rgba(22,32,58,.6); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 10px; padding: 9px 18px; cursor: pointer; font-size: 13px; font-weight: 600;
+    transition: all .18s;
+  }
+  .tab:hover { border-color: var(--accent); color: var(--text); transform: translateY(-1px); }
+  .tab.active {
+    background: linear-gradient(135deg, var(--accent), #4f6bff);
+    border-color: transparent; color: #fff; box-shadow: 0 4px 16px var(--glow);
   }
   .svc { color: var(--accent2); }
   .ver { color: var(--muted); font-size: 12px; }
-  .vuln-tag { color: var(--red); font-size: 11px; cursor: help; }
+  .vuln-tag { color: var(--red); font-size: 11px; cursor: help; font-weight: 700; }
+  .modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100;
+    display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px);
+  }
+  .modal-box {
+    background: var(--card); border: 1px solid var(--border2); border-radius: 14px;
+    padding: 18px 20px; width: 560px; max-width: 90vw; max-height: 80vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .modal-head h2 { font-size: 16px; }
+  .market-item {
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 12px; transition: border-color .15s;
+  }
+  .market-item:hover { border-color: var(--accent); }
+  .market-item .mi-body { flex: 1; }
+  .market-item .mi-name { font-weight: 700; font-size: 13px; }
+  .market-item .mi-desc { color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .toggle {
+    position: relative; width: 40px; height: 22px; border-radius: 11px; cursor: pointer;
+    background: #2a3a5e; border: 1px solid var(--border); transition: background .2s; flex: none;
+  }
+  .toggle.on { background: linear-gradient(135deg, var(--accent), #4f6bff); border-color: transparent; }
+  .toggle::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: #fff; transition: left .2s;
+  }
+  .toggle.on::after { left: 20px; }
 </style>
 </head>
 <body>
 
 <header>
+  <span class="logo-dot"></span>
   <h1>NetScan</h1>
-  <p>网络扫描器 · 主机发现 · 端口扫描 · 服务识别 · 操作系统识别</p>
+  <p class="sub">网络扫描器 · 主机发现 · 端口扫描 · 服务识别 · 操作系统识别</p>
 </header>
 
-<main>
-  <div>
+<nav class="tabs">
+  <button class="tab active" data-tab="scan">🔍 扫描</button>
+  <button class="tab" data-tab="exploit">💥 漏洞利用</button>
+  <button class="tab" data-tab="assets">🗂 资产历史</button>
+  <button class="tab" data-tab="plugins">🧩 插件</button>
+</nav>
+
+<main id="tab-scan" class="tab-panel">
+  <div class="left-col">
     <section class="card">
       <h2>扫描目标</h2>
       <div class="field">
@@ -171,7 +292,7 @@
       </div>
     </section>
 
-    <section class="card" style="margin-top:16px">
+    <section class="card">
       <h2>扫描技术</h2>
       <div class="chips">
         <label class="chip"><input type="checkbox" class="st" value="tcp-connect" checked><span>TCP Connect</span></label>
@@ -184,7 +305,7 @@
       </div>
     </section>
 
-    <section class="card" style="margin-top:16px">
+    <section class="card">
       <h2>扫描选项</h2>
       <div class="chips">
         <label class="chip"><input type="checkbox" id="svc" checked><span>服务识别</span></label>
@@ -200,7 +321,7 @@
       </div>
     </section>
 
-    <section class="card" style="margin-top:16px">
+    <section class="card">
       <h2>高级选项</h2>
       <div class="field">
         <label>代理 (socks5:// 或 http://, 可留空)</label>
@@ -224,8 +345,33 @@
         </select>
       </div>
     </section>
+  </div>
 
-    <section class="card" style="margin-top:16px">
+  <div class="right-col">
+    <section class="card result-card grow">
+      <h2>扫描结果 <span id="count" style="color:var(--accent)"></span></h2>
+      <div class="actions">
+        <button id="start" class="primary">▶ 开始扫描</button>
+        <button id="stop" class="danger">■ 停止</button>
+        <button id="export">⇩ 导出CSV</button>
+        <button id="exporthtml">🌐 导出HTML报告</button>
+        <button id="trace">🛣 路由跟踪</button>
+        <button id="ping">📶 Ping</button>
+        <span id="status">就绪</span>
+      </div>
+      <div class="progress"><div class="fill" id="pfill"></div></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>IP 地址</th><th>主机名</th><th>端口</th><th>协议</th><th>状态</th><th>服务</th><th>版本</th><th>操作系统</th></tr>
+          </thead>
+          <tbody id="results"></tbody>
+        </table>
+        <div id="empty" class="empty">暂无结果，输入目标后点击「开始扫描」</div>
+      </div>
+    </section>
+
+    <section class="card result-card">
       <h2>Web 侦察</h2>
       <div class="chips">
         <label class="chip"><input type="checkbox" id="dir"><span>目录爆破</span></label>
@@ -239,37 +385,244 @@
         <label>子域名爆破深度 (1-3)</label>
         <input id="subdepth" type="number" value="1" min="1" max="3">
       </div>
+      <div id="recon" class="recon-out" style="margin-top:6px">结果将显示在这里</div>
     </section>
   </div>
+</main>
 
-  <section class="card result-card">
-    <h2>扫描结果 <span id="count" style="color:var(--accent)"></span></h2>
-    <div class="actions">
-      <button id="start" class="primary">▶ 开始扫描</button>
-      <button id="stop" class="danger">■ 停止</button>
-      <button id="export">⇩ 导出CSV</button>
-      <button id="exporthtml">🌐 导出HTML报告</button>
-      <button id="trace">🛣 路由跟踪</button>
-      <button id="ping">📶 Ping</button>
-      <span id="status">就绪</span>
+<main id="tab-exploit" class="tab-panel" style="display:none">
+  <section class="card">
+    <h2>服务弱口令爆破</h2>
+    <div class="field">
+      <label>目标(IP/域名)</label>
+      <input id="brute-target" placeholder="192.168.1.1">
     </div>
-    <div class="progress"><div class="fill" id="pfill"></div></div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th>IP 地址</th><th>主机名</th><th>端口</th><th>协议</th><th>状态</th><th>服务</th><th>版本</th><th>操作系统</th></tr>
-        </thead>
-        <tbody id="results"></tbody>
-      </table>
-      <div id="empty" class="empty">暂无结果，输入目标后点击「开始扫描」</div>
+    <div class="field">
+      <label>服务类型</label>
+      <select id="brute-service">
+        <option value="ftp">FTP (21)</option>
+        <option value="ssh">SSH (22)</option>
+        <option value="telnet">Telnet (23)</option>
+        <option value="redis">Redis (6379)</option>
+        <option value="smtp">SMTP (25)</option>
+        <option value="mysql">MySQL (3306)</option>
+        <option value="postgresql">PostgreSQL (5432)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>端口(0=自动)</label>
+      <input id="brute-port" type="number" value="0" min="0">
+    </div>
+    <div class="field">
+      <label>线程数 / 延迟(ms)</label>
+      <div style="display:flex;gap:8px">
+        <input id="brute-threads" type="number" value="10" min="1">
+        <input id="brute-delay" type="number" value="0" min="0">
+      </div>
+    </div>
+    <button id="brute-start" class="primary">▶ 开始爆破</button>
+  </section>
+
+  <section class="card">
+    <h2>漏洞利用</h2>
+    <div class="field">
+      <label>利用模块</label>
+      <select id="exploit-name">
+        <option value="auto">auto(自动匹配)</option>
+        <option value="redis-write-shell">redis-write-shell</option>
+        <option value="docker-escape">docker-escape</option>
+        <option value="es-file-read">es-file-read</option>
+        <option value="nacos-register">nacos-register</option>
+        <option value="jenkins-script">jenkins-script</option>
+        <option value="tomcat-war">tomcat-war</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>目标</label>
+      <input id="exploit-target" placeholder="192.168.1.1">
+    </div>
+    <div class="field">
+      <label>端口(0=自动)</label>
+      <input id="exploit-port" type="number" value="0" min="0">
+    </div>
+    <button id="exploit-start" class="primary">▶ 执行利用</button>
+  </section>
+
+  <section class="card">
+    <h2>反弹 Shell 生成器</h2>
+    <div class="field">
+      <label>类型 / 监听地址 / 端口</label>
+      <div style="display:flex;gap:8px">
+        <select id="shell-type">
+          <option value="bash">bash</option>
+          <option value="sh">sh</option>
+          <option value="nc">nc</option>
+          <option value="python">python</option>
+          <option value="python2">python2</option>
+          <option value="php">php</option>
+          <option value="perl">perl</option>
+          <option value="ruby">ruby</option>
+          <option value="powershell">powershell</option>
+          <option value="lua">lua</option>
+          <option value="node">node</option>
+        </select>
+        <input id="shell-lhost" placeholder="监听IP">
+        <input id="shell-lport" type="number" value="4444">
+      </div>
+    </div>
+    <button id="shell-gen">生成反弹 Shell</button>
+    <pre id="shell-output" class="recon-out" style="margin-top:10px"></pre>
+  </section>
+
+  <section class="card">
+    <h2>一键拿 Shell</h2>
+    <div class="field">
+      <label>目标</label>
+      <input id="gs-target" placeholder="192.168.1.1">
+    </div>
+    <div class="field">
+      <label>目标端口(6379 Redis / 2375 Docker / 8080 Jenkins / 80 RCE)</label>
+      <input id="gs-port" type="number" value="6379" min="1">
+    </div>
+    <div class="field">
+      <label>回连地址 / 端口</label>
+      <div style="display:flex;gap:8px">
+        <input id="gs-lhost" placeholder="本机IP">
+        <input id="gs-lport" type="number" value="4444">
+      </div>
+    </div>
+    <button id="gs-start" class="primary">▶ 一键拿 Shell</button>
+    <p class="sub">自动选择利用链: Redis cron / Docker 逃逸 / Jenkins RCE / RCE链 / 自定义 shells/</p>
+  </section>
+
+  <section class="card" style="grid-column:1/-1">
+    <h2>交互式 Shell 终端</h2>
+    <div id="shell-term" class="shell-term" style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px">
+      <input id="shell-cmd" placeholder="输入命令, 回车执行 (拿 shell 成功后可用)" style="flex:1">
+      <button id="shell-send" class="primary">发送</button>
+      <button id="shell-close" class="primary" style="background:linear-gradient(135deg,#b0476a,#7a2b4a)">断开</button>
     </div>
   </section>
 
-  <section class="card result-card" style="margin-top:16px">
-    <h2>Web 侦察结果</h2>
-    <div id="recon" class="recon-out">（勾选左侧「Web 侦察」选项后，结果将显示在这里）</div>
+  <section class="card">
+    <h2>扫描目标漏洞</h2>
+    <div class="field">
+      <label>目标 / 端口</label>
+      <div style="display:flex;gap:8px">
+        <input id="sv-target" placeholder="192.168.1.1">
+        <input id="sv-port" type="number" value="80" min="1">
+      </div>
+    </div>
+    <button id="sv-start" class="primary">▶ 扫描漏洞(仅命中+复现)</button>
+  </section>
+
+  <section class="card">
+    <h2>扫描 Web POC</h2>
+    <div class="field">
+      <label>目标 / 端口</label>
+      <div style="display:flex;gap:8px">
+        <input id="poc-target" placeholder="192.168.1.1">
+        <input id="poc-port" type="number" value="80" min="1">
+      </div>
+    </div>
+    <button id="poc-start" class="primary">▶ 扫描 Web POC(生成报告)</button>
+  </section>
+
+  <section class="card">
+    <h2>SSH 爆破 + 弹 Shell</h2>
+    <div class="field">
+      <label>目标 / 端口</label>
+      <div style="display:flex;gap:8px">
+        <input id="ssh-target" placeholder="192.168.1.1">
+        <input id="ssh-port" type="number" value="22" min="1">
+      </div>
+    </div>
+    <button id="ssh-start" class="primary">▶ SSH 爆破并弹命令行</button>
+    <p class="sub">爆破 SSH 弱口令 → 成功后自动弹出交互式命令行窗口</p>
+  </section>
+
+  <section class="card">
+    <h2>漏洞报告</h2>
+    <button id="vuln-report" class="primary">▶ 生成漏洞报告(名称+复现步骤)</button>
+    <pre id="vuln-report-out" class="recon-out" style="margin-top:10px;max-height:300px;overflow-y:auto"></pre>
+  </section>
+
+  <section class="card" style="grid-column:1/-1">
+    <h2>利用/爆破结果</h2>
+    <div id="exploit-recon" class="recon-out"></div>
   </section>
 </main>
+
+<main id="tab-assets" class="tab-panel" style="display:none">
+  <section class="card">
+    <h2>资产历史</h2>
+    <div class="field">
+      <label>目标</label>
+      <div style="display:flex;gap:8px">
+        <input id="history-target" placeholder="192.168.1.1 或 example.com">
+        <button id="history-load">查询历史</button>
+        <button id="store-scan">保存当前扫描</button>
+      </div>
+    </div>
+    <pre id="history-output" class="recon-out"></pre>
+  </section>
+</main>
+
+<main id="tab-plugins" class="tab-panel" style="display:none">
+  <section class="card">
+    <h2>插件管理 <span id="plugin-count" style="color:var(--accent)"></span></h2>
+    <div class="actions" style="margin-top:0">
+      <input id="plugin-search" placeholder="🔍 搜索插件名" style="max-width:200px">
+      <select id="plugin-filter" style="max-width:150px">
+        <option value="">全部类型</option>
+        <option value="poc">POC</option>
+        <option value="exploit">Exploit</option>
+        <option value="report">Report</option>
+        <option value="output">Output</option>
+        <option value="notification">Notification</option>
+      </select>
+      <button id="browse-market" class="primary">🧭 浏览插件市场</button>
+      <button id="install-local">📂 从本地安装</button>
+      <span id="plugin-update-tip" style="color:var(--amber);font-size:12px"></span>
+    </div>
+    <div class="table-wrap" style="max-height:calc(100vh - 280px)">
+      <table>
+        <thead>
+          <tr><th>插件名</th><th>版本</th><th>类型</th><th>状态</th><th>来源</th><th>操作</th></tr>
+        </thead>
+        <tbody id="plugin-list"></tbody>
+      </table>
+    </div>
+    <div id="plugin-status" style="margin-top:10px;color:var(--muted);font-size:12px"></div>
+  </section>
+</main>
+
+<!-- 插件市场弹窗 -->
+<div id="market-modal" class="modal" style="display:none">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>插件市场</h2>
+      <button id="market-close" style="border:none;background:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div id="market-list"></div>
+  </div>
+</div>
+
+<!-- 本地安装弹窗 -->
+<div id="local-modal" class="modal" style="display:none">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>从本地安装</h2>
+      <button id="local-close" style="border:none;background:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div class="field">
+      <label>插件文件路径 (.yaml / .json)</label>
+      <input id="local-path" placeholder="C:\plugins\my-poc.yaml">
+    </div>
+    <button id="local-confirm" class="primary">安装</button>
+  </div>
+</div>
 
 <script>
   const $ = id => document.getElementById(id);
@@ -344,6 +697,26 @@
     const el = $('recon');
     if (el.dataset.empty === '1') { el.textContent = ''; el.dataset.empty = '0'; }
     el.textContent += line + '\n';
+    el.scrollTop = el.scrollHeight;
+  };
+
+  window.addExploitRecon = function(line) {
+    const el = $('exploit-recon');
+    el.textContent += line + '\n';
+    el.scrollTop = el.scrollHeight;
+  };
+
+  window.addShellOut = function(chunk) {
+    const el = $('shell-term');
+    const clean = chunk
+      .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+      .replace(/\x1b[()][0-9A-Za-z]/g, '')
+      .replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, '')
+      .replace(/\x1b[PX^_].*?\x1b\\/g, '')
+      .replace(/\x1b[=>]/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '');
+    el.textContent += clean;
     el.scrollTop = el.scrollHeight;
   };
 
@@ -461,11 +834,212 @@
     $('status').textContent = '已导出 ' + results.length + ' 条结果';
   });
 
-  window.addEventListener('load', function() {
-    const empty = document.createElement('div');
-    empty.id = 'empty'; empty.className = 'empty';
-    empty.textContent = '暂无结果，输入目标后点击「开始扫描」';
+  // Tab 切换
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+      $('tab-' + this.dataset.tab).style.display = '';
+    });
   });
+
+  // 爆破
+  $('brute-start').addEventListener('click', function() {
+    const t = $('brute-target').value.trim();
+    if (!t) { $('exploit-recon').textContent = '请输入目标'; return; }
+    $('exploit-recon').textContent = '';
+    $('exploit-recon').dataset.empty = '0';
+    window.brute(t, parseInt($('brute-port').value,10)||0, $('brute-service').value,
+      parseInt($('brute-threads').value,10)||10, parseInt($('brute-delay').value,10)||0);
+  });
+
+  // 漏洞利用
+  $('exploit-start').addEventListener('click', function() {
+    const t = $('exploit-target').value.trim();
+    if (!t) { $('exploit-recon').textContent = '请输入目标'; return; }
+    $('exploit-recon').textContent = '';
+    $('exploit-recon').dataset.empty = '0';
+    window.exploit($('exploit-name').value, t, parseInt($('exploit-port').value,10)||0);
+  });
+
+  // 反弹 shell
+  $('shell-gen').addEventListener('click', function() {
+    const h = $('shell-lhost').value.trim();
+    if (!h) { $('shell-output').textContent = '请输入监听地址'; return; }
+    const cmd = window.shellGen($('shell-type').value, h, parseInt($('shell-lport').value,10)||4444);
+    $('shell-output').textContent = cmd || '不支持的 shell 类型';
+  });
+
+  // 一键拿 shell
+  $('gs-start').addEventListener('click', function() {
+    const t = $('gs-target').value.trim();
+    const h = $('gs-lhost').value.trim();
+    if (!t) { window.addExploitRecon('请输入目标'); return; }
+    if (!h) { window.addExploitRecon('请输入回连地址'); return; }
+    $('shell-term').textContent = '';
+    $('gs-start').disabled = true;
+    window.getShell(t, h, parseInt($('gs-lport').value,10)||4444, parseInt($('gs-port').value,10)||6379);
+    setTimeout(function(){ $('gs-start').disabled = false; }, 2000);
+  });
+
+  // 交互式 shell 输入
+  function sendShellCmd() {
+    const inp = $('shell-cmd');
+    const cmd = inp.value;
+    if (!cmd) return;
+    window.shellInput(cmd);
+    inp.value = '';
+  }
+  $('shell-send').addEventListener('click', sendShellCmd);
+  $('shell-cmd').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); sendShellCmd(); }
+  });
+  $('shell-close').addEventListener('click', function() { window.shellClose(); });
+
+  // 扫描目标漏洞
+  $('sv-start').addEventListener('click', function() {
+    const t = $('sv-target').value.trim();
+    if (!t) { window.addExploitRecon('请输入目标'); return; }
+    window.scanVuln(t, parseInt($('sv-port').value,10)||80);
+  });
+
+  // 扫描 Web POC
+  $('poc-start').addEventListener('click', function() {
+    const t = $('poc-target').value.trim();
+    if (!t) { window.addExploitRecon('请输入目标'); return; }
+    window.pocScan(t, parseInt($('poc-port').value,10)||80);
+  });
+
+  // SSH 爆破 + 弹 shell
+  $('ssh-start').addEventListener('click', function() {
+    const t = $('ssh-target').value.trim();
+    if (!t) { window.addExploitRecon('请输入目标'); return; }
+    window.sshShell(t, parseInt($('ssh-port').value,10)||22);
+  });
+
+  // 漏洞报告
+  $('vuln-report').addEventListener('click', function() {
+    $('vuln-report-out').textContent = window.vulnReport();
+  });
+
+  // 历史查询
+  $('history-load').addEventListener('click', function() {
+    const t = $('history-target').value.trim();
+    if (!t) { $('history-output').textContent = '请输入目标'; return; }
+    $('history-output').textContent = window.history(t);
+  });
+
+  // 保存当前扫描到资产库
+  $('store-scan').addEventListener('click', function() {
+    const t = $('targets').value.split(/[,\s;]+/).filter(Boolean)[0] || '';
+    if (!t) { $('history-output').textContent = '请先在扫描页输入目标并扫描'; return; }
+    const r = window.storeScan(t);
+    $('history-output').textContent = r;
+  });
+
+  // ---- 插件管理 ----
+  let allPlugins = [];
+  const typeLabel = { poc:'POC', exploit:'Exploit', report:'Report', output:'Output', notification:'Notification' };
+
+  function renderPlugins() {
+    const q = $('plugin-search').value.toLowerCase();
+    const ft = $('plugin-filter').value;
+    const tbody = $('plugin-list');
+    const list = allPlugins.filter(p =>
+      (!ft || p.type === ft) && (!q || p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)));
+    tbody.innerHTML = '';
+    for (const p of list) {
+      const enabled = p.enabled;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><b>${esc(p.name)}</b><br><span class="ver">${esc(p.id)}</span></td>
+        <td class="ver">${esc(p.version||'')}</td>
+        <td>${esc(typeLabel[p.type]||p.type)}</td>
+        <td><span class="badge ${enabled?'open':'down'}">${enabled?'● 启用':'○ 禁用'}</span></td>
+        <td class="ver">${p.source==='builtin'?'内置':'用户'}</td>
+        <td>
+          <span class="toggle ${enabled?'on':''}" data-id="${esc(p.id)}" data-on="${enabled}" title="启用/禁用"></span>
+          <button class="plugin-remove" data-id="${esc(p.id)}" data-name="${esc(p.name)}">卸载</button>
+        </td>`;
+      tbody.appendChild(tr);
+    }
+    const en = allPlugins.filter(p => p.enabled).length;
+    $('plugin-count').textContent = `(${allPlugins.length} 个, 已启用 ${en})`;
+  }
+
+  async function loadPlugins() {
+    allPlugins = JSON.parse(await window.getPlugins() || '[]');
+    renderPlugins();
+  }
+
+  $('plugin-search').addEventListener('input', renderPlugins);
+  $('plugin-filter').addEventListener('change', renderPlugins);
+
+  $('plugin-list').addEventListener('click', async function(e) {
+    const tg = e.target.closest('.toggle');
+    if (tg) {
+      const id = tg.dataset.id;
+      const on = tg.dataset.on === 'true';
+      if (on) { await window.disablePlugin(id); } else { await window.enablePlugin(id); }
+      await loadPlugins();
+    }
+    const rm = e.target.closest('.plugin-remove');
+    if (rm) {
+      if (confirm('确定要卸载插件「' + rm.dataset.name + '」吗？')) {
+        const r = await window.uninstallPlugin(rm.dataset.id).catch(e => e);
+        if (r) { $('plugin-status').textContent = '卸载失败: ' + r; }
+        await loadPlugins();
+      }
+    }
+  });
+
+  // 插件市场
+  $('browse-market').addEventListener('click', async function() {
+    const list = JSON.parse(await window.getMarketPlugins() || '[]');
+    const box = $('market-list');
+    box.innerHTML = '';
+    for (const p of list) {
+      const installed = allPlugins.some(x => x.id === p.id);
+      const div = document.createElement('div');
+      div.className = 'market-item';
+      div.innerHTML = `
+        <div class="mi-body">
+          <div class="mi-name">${esc(p.name)} <span class="ver">v${esc(p.version||'')}</span></div>
+          <div class="mi-desc">${esc(p.description||'')} · ${esc(typeLabel[p.type]||p.type)} · ⬇ ${p.downloads||0}</div>
+        </div>
+        <button class="mi-install primary" data-id="${esc(p.id)}" data-action="${installed ? 'update' : 'install'}">${installed ? '更新' : '安装'}</button>`;
+      box.appendChild(div);
+    }
+    $('market-modal').style.display = 'flex';
+  });
+  $('market-close').addEventListener('click', () => $('market-modal').style.display = 'none');
+  $('market-modal').addEventListener('click', function(e) { if (e.target === this) this.style.display = 'none'; });
+  $('market-list').addEventListener('click', async function(e) {
+    const btn = e.target.closest('.mi-install');
+    if (btn) {
+      btn.textContent = '下载中…';
+      const r = btn.dataset.action === 'update'
+        ? await window.updatePlugin(btn.dataset.id).catch(e => e)
+        : await window.installMarketPlugin(btn.dataset.id).catch(e => e);
+      btn.textContent = r ? '失败' : '✓ 已安装';
+      if (!r) await loadPlugins();
+    }
+  });
+
+  // 本地安装
+  $('install-local').addEventListener('click', () => { $('local-modal').style.display = 'flex'; });
+  $('local-close').addEventListener('click', () => $('local-modal').style.display = 'none');
+  $('local-modal').addEventListener('click', function(e) { if (e.target === this) this.style.display = 'none'; });
+  $('local-confirm').addEventListener('click', async function() {
+    const path = $('local-path').value.trim();
+    if (!path) { $('plugin-status').textContent = '请输入文件路径'; return; }
+    const r = await window.installFilePlugin(path).catch(e => String(e));
+    if (r) { $('plugin-status').textContent = '安装失败: ' + r; }
+    else { $('plugin-status').textContent = '已安装'; $('local-modal').style.display = 'none'; await loadPlugins(); }
+  });
+
+  loadPlugins();
 </script>
 </body>
 </html>

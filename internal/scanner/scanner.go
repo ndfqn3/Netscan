@@ -156,9 +156,6 @@ func (s *Scanner) Run() error {
 		return nil
 	}
 
-	// 计算总探测数用于进度
-	scanCount := len(s.optScanTypes())
-	totalProbes := int64(len(upHosts) * len(s.ports) * scanCount)
 	var doneProbes int64
 
 	s.report(Progress{TotalHosts: totalHosts, ScannedHost: 0, TotalPorts: len(s.ports), ScannedPort: 0, Message: "开始扫描..."})
@@ -178,8 +175,7 @@ func (s *Scanner) Run() error {
 				return
 			default:
 			}
-			host := s.scanHost(ip, raw, sem, ctx, &doneProbes, totalProbes, &scannedHosts, totalHosts)
-			_ = host
+			_ = s.scanHost(ip, raw, sem, ctx, &doneProbes, &scannedHosts, totalHosts)
 		}()
 	}
 	wg.Wait()
@@ -285,7 +281,7 @@ func (s *Scanner) emitHostDown(ip string) {
 }
 
 // scanHost 扫描单个主机, 结果实时输出
-func (s *Scanner) scanHost(ip string, raw *rawScanner, sem *semaphore.Weighted, ctx context.Context, doneProbes *int64, totalProbes int64, scannedHosts *int64, totalHosts int) Host {
+func (s *Scanner) scanHost(ip string, raw *rawScanner, sem *semaphore.Weighted, ctx context.Context, doneProbes *int64, scannedHosts *int64, totalHosts int) Host {
 	host := Host{IP: ip, Latency: s.latency[ip]}
 
 	// 反向 DNS
@@ -407,7 +403,8 @@ func (s *Scanner) emitPort(ip, hostname string, port int, protocol string, state
 			vuln = RunPOC(ip, port, s.timeout)
 		}
 		if s.opts.Fingerprint && protocol == "tcp" && isHTTPService(service) {
-			if fp := Fingerprint(ip, port, false, 2*time.Second); fp != "" {
+			https := service == "https" || service == "https-alt" || port == 443 || port == 8443
+			if fp := Fingerprint(ip, port, https, 2*time.Second); fp != "" {
 				service = fp
 				version = ""
 			}
@@ -519,6 +516,12 @@ func (s *Scanner) report(p Progress) {
 		total := float64(p.TotalHosts * p.TotalPorts)
 		if total > 0 {
 			p.Percent = float64(p.ScannedPort) / total * 100
+			if p.Percent > 100 {
+				p.Percent = 100
+			}
+			if p.Percent < 0 {
+				p.Percent = 0
+			}
 		}
 	}
 	if s.onProgress != nil {

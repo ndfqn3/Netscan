@@ -8,13 +8,13 @@ import (
 
 func TestParsePortSpec(t *testing.T) {
 	cases := map[string]int{
-		"80":        1,
-		"1-100":     100,
-		"80,443,8080": 3,
+		"80":           1,
+		"1-100":        100,
+		"80,443,8080":  3,
 		"22,80-90,443": 13,
-		"top-100":    100,
-		"top-10":     10,
-		"top-2000":   len(topPorts),
+		"top-100":      100,
+		"top-10":       10,
+		"top-2000":     len(topPorts),
 	}
 	for spec, want := range cases {
 		got := len(parsePortSpec(spec))

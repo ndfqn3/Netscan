@@ -35,9 +35,9 @@ var cmsRules = []cmsRule{
 		Cookies:   []string{"discuz_", "dz_sid"},
 	},
 	{
-		Name:      "ThinkPHP",
-		BodyRe:    []string{`ThinkPHP`, `thinkphp`},
-		VersionRe: `ThinkPHP[^0-9]*([0-9.]+)`,
+		Name:       "ThinkPHP",
+		BodyRe:     []string{`ThinkPHP`, `thinkphp`},
+		VersionRe:  `ThinkPHP[^0-9]*([0-9.]+)`,
 		HeaderSubs: map[string]string{"X-Powered-By": "ThinkPHP"},
 	},
 	{
@@ -52,9 +52,9 @@ var cmsRules = []cmsRule{
 		Cookies:   []string{"joomla_"},
 	},
 	{
-		Name:      "Drupal",
-		BodyRe:    []string{`Drupal.settings`, `Drupal\.behaviors`},
-		VersionRe: `Drupal ([0-9.]+)`,
+		Name:       "Drupal",
+		BodyRe:     []string{`Drupal.settings`, `Drupal\.behaviors`},
+		VersionRe:  `Drupal ([0-9.]+)`,
 		HeaderSubs: map[string]string{"X-Generator": "Drupal"},
 	},
 	{
@@ -63,30 +63,30 @@ var cmsRules = []cmsRule{
 		VersionRe: `phpMyAdmin ([0-9.]+)`,
 	},
 	{
-		Name:      "Laravel",
-		Cookies:   []string{"laravel_session", "XSRF-TOKEN"},
-		BodyRe:    []string{`laravel`},
+		Name:    "Laravel",
+		Cookies: []string{"laravel_session", "XSRF-TOKEN"},
+		BodyRe:  []string{`laravel`},
 	},
 	{
-		Name:      "Shiro",
-		Cookies:   []string{"rememberMe=deleteMe"},
+		Name:       "Shiro",
+		Cookies:    []string{"rememberMe=deleteMe"},
 		HeaderSubs: map[string]string{"Set-Cookie": "rememberMe="},
 	},
 	{
-		Name:      "Spring Boot",
-		BodyRe:    []string{`Whitelabel Error Page`, `Spring Boot`},
+		Name:       "Spring Boot",
+		BodyRe:     []string{`Whitelabel Error Page`, `Spring Boot`},
 		HeaderSubs: map[string]string{"X-Application-Context": ""},
 	},
 	{
-		Name:      "Tomcat",
+		Name:       "Tomcat",
 		HeaderSubs: map[string]string{"Server": "Apache-Coyote"},
 	},
 	{
-		Name:      "Nginx",
+		Name:       "Nginx",
 		HeaderSubs: map[string]string{"Server": "nginx"},
 	},
 	{
-		Name:      "IIS",
+		Name:       "IIS",
 		HeaderSubs: map[string]string{"Server": "Microsoft-IIS"},
 	},
 	{
@@ -100,12 +100,12 @@ var cmsRules = []cmsRule{
 		VersionRe: `MediaWiki ([0-9.]+)`,
 	},
 	{
-		Name:      "EmpireCMS",
-		BodyRe:    []string{`Powered by EmpireCMS`, `EmpireCMS`},
+		Name:   "EmpireCMS",
+		BodyRe: []string{`Powered by EmpireCMS`, `EmpireCMS`},
 	},
 	{
-		Name:      "SiteServer",
-		BodyRe:    []string{`SiteServer CMS`, `Powered by SiteServer`},
+		Name:   "SiteServer",
+		BodyRe: []string{`SiteServer CMS`, `Powered by SiteServer`},
 	},
 }
 

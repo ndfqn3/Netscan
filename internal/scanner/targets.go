@@ -101,6 +101,15 @@ func cidrToIPs(cidr string, maxTargets int) ([]string, error) {
 	mask := binary.BigEndian.Uint32(ipnet.Mask)
 	network := start & mask
 	broadcast := network | ^mask
+	// 特殊 CIDR: /32 只有一个地址(自身), /31 按 RFC 3021 两个地址都可用
+	hostBits := ^mask
+	if hostBits <= 1 {
+		var out []string
+		for i := network; i <= broadcast; i++ {
+			out = append(out, uint32ToIP(i))
+		}
+		return out, nil
+	}
 	count := broadcast - network - 1 // 排除网络位与广播位
 	if maxTargets > 0 && count > uint32(maxTargets) {
 		return nil, fmt.Errorf("目标 %s 含 %d 个 IP, 超过上限 %d", cidr, count, maxTargets)
@@ -133,6 +142,9 @@ func rangeToIPs(r string, maxTargets int) ([]string, error) {
 		last, err := strconv.Atoi(end)
 		if err != nil {
 			return nil, fmt.Errorf("无效范围终点 %s", end)
+		}
+		if last < 0 || last > 255 {
+			return nil, fmt.Errorf("范围末段越界 %s (应为 0-255)", end)
 		}
 		b4 := append(net.IP(nil), baseIP.To4()...)
 		b4[3] = byte(last)

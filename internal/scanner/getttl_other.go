@@ -45,7 +45,8 @@ func getTTL(ip string, timeout time.Duration) int {
 		if cm == nil || peer == nil {
 			continue
 		}
-		if peer.(*net.IPAddr).IP.String() != ip {
+		pa, ok := peer.(*net.IPAddr)
+		if !ok || pa.IP.String() != ip {
 			continue
 		}
 		rm, err := icmp.ParseMessage(1, rb[:n])

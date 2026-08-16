@@ -41,6 +41,9 @@ func applyProotSafety(opts *Options) bool {
 	}
 	if len(types) > 0 {
 		opts.ScanTypes = types
+	} else {
+		// 所有扫描类型都是 raw socket 类型, 降级为 TCP Connect 扫描
+		opts.ScanTypes = []ScanType{ScanTCPConnect}
 	}
 	// 降低并发
 	if opts.Concurrency > 100 {

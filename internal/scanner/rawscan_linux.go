@@ -69,11 +69,14 @@ func (s *rawScanner) probe(ip string, port int, flags uint8, timeout time.Durati
 	s.mu.Lock()
 	s.pending[key] = ch
 	s.mu.Unlock()
-
-	if err := s.send(ip, port, flags); err != nil {
+	// 无论命中/超时/停止, 都清理 pending 条目, 避免 map 泄漏
+	defer func() {
 		s.mu.Lock()
 		delete(s.pending, key)
 		s.mu.Unlock()
+	}()
+
+	if err := s.send(ip, port, flags); err != nil {
 		return StateFiltered
 	}
 
@@ -105,7 +108,13 @@ func (s *rawScanner) probe(ip string, port int, flags uint8, timeout time.Durati
 			return StateOpenFiltered
 		}
 	case <-timer.C:
-		return StateFiltered
+		// FIN/NULL/Xmas 扫描无响应 => open|filtered; SYN/ACK 无响应 => filtered
+		switch flags {
+		case flagFIN, 0, flagFIN | flagURG | flagPSH:
+			return StateOpenFiltered
+		default:
+			return StateFiltered
+		}
 	case <-s.stop:
 		return StateFiltered
 	}
@@ -183,7 +192,7 @@ func buildTCPHeader(srcPort, dstPort uint16, seq uint32, flags uint8, window uin
 	binary.BigEndian.PutUint16(hdr[2:4], dstPort)
 	binary.BigEndian.PutUint32(hdr[4:8], seq)
 	binary.BigEndian.PutUint32(hdr[8:12], 0) // ack
-	hdr[12] = 5 << 4                        // data offset
+	hdr[12] = 5 << 4                         // data offset
 	hdr[13] = flags
 	binary.BigEndian.PutUint16(hdr[14:16], window)
 	binary.BigEndian.PutUint16(hdr[18:20], 0) // urgent

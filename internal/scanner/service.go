@@ -19,7 +19,7 @@ type serviceProbe struct {
 // serviceProbes 服务识别探针库(正则指纹)
 var serviceProbes = []serviceProbe{
 	// ---- 远程登录类 ----
-	{Name: "ssh", Payload: nil, Regex: regexp.MustCompile(`SSH-([0-9.]+)-([^\s\r\n]+)`), Service: "ssh", VersionGroup: 0},
+	{Name: "ssh", Payload: nil, Regex: regexp.MustCompile(`SSH-[0-9.]+-([^\s\r\n]+)`), Service: "ssh", VersionGroup: 1},
 	{Name: "telnet", Payload: nil, Regex: regexp.MustCompile(`(?i)telnet`), Service: "telnet", VersionGroup: 0},
 	{Name: "rlogin", Payload: nil, Regex: regexp.MustCompile(`(?i)(login:|username:)`), Service: "login", VersionGroup: 0},
 	{Name: "rsh", Payload: nil, Regex: regexp.MustCompile(`(?i)\x00`), Service: "unknown", VersionGroup: 0},
@@ -46,16 +46,17 @@ var serviceProbes = []serviceProbe{
 	{Name: "http-server", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*([^\r\n]+)`), Service: "http", VersionGroup: 1},
 	{Name: "http-status", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)^HTTP/1\.[01]\s+\d{3}`), Service: "http", VersionGroup: 0},
 	{Name: "http2-status", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)^HTTP/2\s+\d{3}`), Service: "http", VersionGroup: 0},
-	{Name: "nginx", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*nginx/([^\s]+)`), Service: "http", VersionGroup: 0},
-	{Name: "apache", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*Apache/([^\s]+)`), Service: "http", VersionGroup: 0},
-	{Name: "iis", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*Microsoft-IIS/([^\s]+)`), Service: "http", VersionGroup: 0},
-	{Name: "tomcat", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*Apache-Coyote/([^\s]+)`), Service: "http", VersionGroup: 0},
+	{Name: "nginx", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*nginx/([^\s]+)`), Service: "http", VersionGroup: 1},
+	{Name: "apache", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*Apache(?:/([^\s]+))?`), Service: "http", VersionGroup: 1},
+	{Name: "iis", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*Microsoft-IIS/([^\s]+)`), Service: "http", VersionGroup: 1},
+	{Name: "tomcat", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*Apache-Coyote/([^\s]+)`), Service: "http", VersionGroup: 1},
 	{Name: "jetty", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*Jetty\(([^)]+)\)`), Service: "http", VersionGroup: 1},
 	{Name: "litespeed", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*LiteSpeed`), Service: "http", VersionGroup: 0},
-	{Name: "gunicorn", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*gunicorn/([^\s]+)`), Service: "http", VersionGroup: 0},
-	{Name: "werkzeug", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*Werkzeug/([^\s]+)`), Service: "http", VersionGroup: 0},
+	{Name: "gunicorn", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*gunicorn/([^\s]+)`), Service: "http", VersionGroup: 1},
+	{Name: "werkzeug", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*Werkzeug/([^\s]+)`), Service: "http", VersionGroup: 1},
 	{Name: "caddy", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*Caddy`), Service: "http", VersionGroup: 0},
-	{Name: "lighttpd", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*lighttpd/([^\s]+)`), Service: "http", VersionGroup: 0},
+	{Name: "lighttpd", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*lighttpd/([^\s]+)`), Service: "http", VersionGroup: 1},
+	{Name: "openresty", Payload: []byte("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"), Regex: regexp.MustCompile(`(?i)Server:\s*openresty/([^\s]+)`), Service: "http", VersionGroup: 1},
 
 	// ---- 数据库类 ----
 	{Name: "mysql", Payload: nil, Regex: regexp.MustCompile(`(?s)^.\x00\x00\x00.\x0a([0-9.]+)`), Service: "mysql", VersionGroup: 1},
@@ -63,6 +64,8 @@ var serviceProbes = []serviceProbe{
 	{Name: "postgresql", Payload: nil, Regex: regexp.MustCompile(`^[ENSE]`), Service: "postgresql", VersionGroup: 0},
 	{Name: "redis", Payload: []byte("PING\r\n"), Regex: regexp.MustCompile(`\+PONG`), Service: "redis", VersionGroup: 0},
 	{Name: "redis-auth", Payload: []byte("PING\r\n"), Regex: regexp.MustCompile(`-NOAUTH`), Service: "redis", VersionGroup: 0},
+	{Name: "redis-info", Payload: []byte("INFO\r\n"), Regex: regexp.MustCompile(`redis_version:([^\s\r\n]+)`), Service: "redis", VersionGroup: 1},
+	{Name: "redis-info-auth", Payload: []byte("INFO\r\n"), Regex: regexp.MustCompile(`-NOAUTH`), Service: "redis", VersionGroup: 0},
 	{Name: "memcached", Payload: []byte("stats\r\n"), Regex: regexp.MustCompile(`STAT version\s+([^\s\r\n]+)`), Service: "memcached", VersionGroup: 1},
 	{Name: "mongodb", Payload: nil, Regex: regexp.MustCompile(`(?i)mongodb`), Service: "mongodb", VersionGroup: 0},
 	{Name: "elasticsearch", Payload: []byte("GET / HTTP/1.0\r\n\r\n"), Regex: regexp.MustCompile(`(?i)"cluster_name"\s*:\s*"([^"]+)"`), Service: "elasticsearch", VersionGroup: 1},

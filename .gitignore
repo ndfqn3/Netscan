@@ -1,0 +1,28 @@
+# 构建产物
+dist/
+*.exe
+*.test
+*.out
+/cli
+/netscan
+/netscan-*
+
+# 运行时状态/数据目录
+.netscan_state/
+.netscan_pocs/
+.netscan_plugins/
+.netscan_dicts/
+.netscan_modules/
+.netscan_shells/
+netscan.db
+
+# 插件本地状态
+internal/scanner/plugins/.state.json
+
+# IDE
+.idea/
+.vscode/
+
+# 系统文件
+.DS_Store
+Thumbs.db

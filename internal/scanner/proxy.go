@@ -52,15 +52,18 @@ func dialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
 	return d.Dial("tcp", addr)
 }
 
-// httpClient 创建带代理支持的 HTTP 客户端
-func httpClient(timeout time.Duration) *http.Client {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	if pu := getProxy(); pu != "" {
-		if u, err := url.Parse(pu); err == nil {
-			tr.Proxy = http.ProxyURL(u)
+// sharedTransport 全局共享 HTTP Transport(连接池复用, 代理动态获取)
+var sharedTransport = &http.Transport{
+	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	Proxy: func(req *http.Request) (*url.URL, error) {
+		if pu := getProxy(); pu != "" {
+			return url.Parse(pu)
 		}
-	}
-	return &http.Client{Timeout: timeout, Transport: tr}
+		return nil, nil
+	},
+}
+
+// httpClient 创建带代理支持与连接复用的 HTTP 客户端
+func httpClient(timeout time.Duration) *http.Client {
+	return &http.Client{Timeout: timeout, Transport: sharedTransport}
 }

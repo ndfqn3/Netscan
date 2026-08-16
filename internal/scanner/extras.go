@@ -8,6 +8,15 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
+// PingAny 综合探测主机存活(ARP/ICMP 优先, 无权限时回退 TCP)
+func PingAny(ip string, timeout time.Duration) (time.Duration, bool) {
+	if timeout <= 0 {
+		timeout = time.Second
+	}
+	up, latency := isHostUp(ip, timeout)
+	return latency, up
+}
+
 // Ping 对目标进行 ICMP Echo 探测, 返回往返延迟与是否存活
 func Ping(ip string, timeout time.Duration) (time.Duration, bool) {
 	conn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")

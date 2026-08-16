@@ -1,0 +1,6 @@
+kali
+123456
+password
+root
+toor
+admin

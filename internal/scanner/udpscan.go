@@ -47,13 +47,16 @@ func (s *udpScanner) probe(port int, timeout time.Duration) PortState {
 	s.mu.Lock()
 	s.pending[port] = ch
 	s.mu.Unlock()
+	// 无论命中/超时/停止, 都清理 pending 条目, 避免 map 泄漏
+	defer func() {
+		s.mu.Lock()
+		delete(s.pending, port)
+		s.mu.Unlock()
+	}()
 
 	// 发送 UDP 探测包
 	conn, err := net.DialTimeout("udp", net.JoinHostPort(s.ip, itoa(port)), timeout)
 	if err != nil {
-		s.mu.Lock()
-		delete(s.pending, port)
-		s.mu.Unlock()
 		return StateFiltered
 	}
 	conn.Write([]byte("\x00")) // 空探测负载

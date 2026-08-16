@@ -1,5 +1,5 @@
 # NetScan CLI 构建脚本(Windows)
-# 用法: powershell -ExecutionPolicy Bypass -File buildCLI.ps1
+# 用法: powershell -ExecutionPolicy Bypass -File buildcli.ps1
 # 仅编译 CLI(纯 Go, 可交叉编译到所有主流平台), 不编译 GUI。
 # 命名: x64 = 64位(amd64), x86 = 32位(386), arm64 = ARM 64位。
 

@@ -195,6 +195,19 @@ func SubdomainBrute(domain string, depth int, concurrency int, timeout time.Dura
 	visited := map[string]bool{domain: true}
 	queue := []string{domain}
 
+	// 通配符 DNS 检测: 随机不存在的子域名若能解析, 说明目标使用通配符解析, 记录其 /24 网段用于过滤
+	wildcardPrefixes := map[string]bool{}
+	probeName := "netscan-wildcard-" + itoa(int(time.Now().UnixNano()%100000)) + "." + domain
+	if ips, err := net.LookupHost(probeName); err == nil {
+		for _, ip := range ips {
+			if parts := strings.Split(ip, "."); len(parts) == 4 {
+				wildcardPrefixes[parts[0]+"."+parts[1]+"."+parts[2]+"."] = true
+			} else {
+				wildcardPrefixes[ip] = true
+			}
+		}
+	}
+
 	for level := 0; level < depth && len(queue) > 0; level++ {
 		var mu sync.Mutex
 		var next []string
@@ -214,6 +227,24 @@ func SubdomainBrute(domain string, depth int, concurrency int, timeout time.Dura
 					ips, err := net.LookupHost(name)
 					if err != nil || len(ips) == 0 {
 						return
+					}
+					// 过滤通配符解析(所有 IPv4 都在通配符网段内视为误报, IPv6 随机不参与判断)
+					if len(wildcardPrefixes) > 0 {
+						hasV4 := false
+						allWildcard := true
+						for _, ip := range ips {
+							if parts := strings.Split(ip, "."); len(parts) == 4 {
+								hasV4 = true
+								prefix := parts[0] + "." + parts[1] + "." + parts[2] + "."
+								if !wildcardPrefixes[prefix] {
+									allWildcard = false
+									break
+								}
+							}
+						}
+						if hasV4 && allWildcard {
+							return
+						}
 					}
 					mu.Lock()
 					if !visited[name] {

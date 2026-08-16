@@ -49,7 +49,7 @@ var pocProbes = []pocProbe{
 	},
 	{
 		Service: "elasticsearch", Port: 9200,
-		HTTP:    true, Path: "/",
+		HTTP: true, Path: "/",
 		Match: func(r string) bool {
 			return strings.Contains(r, "cluster_name") || strings.Contains(r, "version")
 		},
@@ -57,65 +57,71 @@ var pocProbes = []pocProbe{
 	},
 	{
 		Service: "docker", Port: 2375,
-		HTTP:    true, Path: "/version",
-		Match:   func(r string) bool { return strings.Contains(r, "ApiVersion") },
-		Vuln:    "Docker API 未授权访问(可执行容器/读取宿主机)",
+		HTTP: true, Path: "/version",
+		Match: func(r string) bool { return strings.Contains(r, "ApiVersion") },
+		Vuln:  "Docker API 未授权访问(可执行容器/读取宿主机)",
+	},
+	{
+		Service: "docker", Port: 2376,
+		HTTP: true, Path: "/version",
+		Match: func(r string) bool { return strings.Contains(r, "ApiVersion") },
+		Vuln:  "Docker API 未授权访问(可执行容器/读取宿主机)",
 	},
 	{
 		Service: "couchdb", Port: 5984,
-		HTTP:    true, Path: "/",
-		Match:   func(r string) bool { return strings.Contains(r, "couchdb") },
-		Vuln:    "CouchDB 未授权访问(可读取数据库)",
+		HTTP: true, Path: "/",
+		Match: func(r string) bool { return strings.Contains(r, "couchdb") },
+		Vuln:  "CouchDB 未授权访问(可读取数据库)",
 	},
 	{
 		Service: "etcd", Port: 2379,
-		HTTP:    true, Path: "/version",
-		Match:   func(r string) bool { return strings.Contains(r, "etcdserver") || strings.Contains(r, "etcdcluster") },
-		Vuln:    "etcd 未授权访问(可读写键值对)",
+		HTTP: true, Path: "/version",
+		Match: func(r string) bool { return strings.Contains(r, "etcdserver") || strings.Contains(r, "etcdcluster") },
+		Vuln:  "etcd 未授权访问(可读写键值对)",
 	},
 	{
 		Service: "consul", Port: 8500,
-		HTTP:    true, Path: "/v1/agent/self",
-		Match:   func(r string) bool { return strings.Contains(r, "Config") || strings.Contains(r, "Member") },
-		Vuln:    "Consul 未授权访问(可读取服务注册信息)",
+		HTTP: true, Path: "/v1/agent/self",
+		Match: func(r string) bool { return strings.Contains(r, "Config") || strings.Contains(r, "Member") },
+		Vuln:  "Consul 未授权访问(可读取服务注册信息)",
 	},
 	{
 		Service: "nacos", Port: 8848,
-		HTTP:    true, Path: "/nacos/v1/auth/users?pageNo=1&pageSize=9",
-		Match:   func(r string) bool { return strings.Contains(r, "totalCount") || strings.Contains(r, "username") },
-		Vuln:    "Nacos 未授权访问(可读取用户列表/配置)",
+		HTTP: true, Path: "/nacos/v1/auth/users?pageNo=1&pageSize=9",
+		Match: func(r string) bool { return strings.Contains(r, "totalCount") || strings.Contains(r, "username") },
+		Vuln:  "Nacos 未授权访问(可读取用户列表/配置)",
 	},
 	{
 		Service: "jenkins", Port: 8080,
-		HTTP:    true, Path: "/script",
-		Match:   func(r string) bool { return strings.Contains(r, "Jenkins") },
-		Vuln:    "Jenkins 疑似未授权(可访问脚本控制台)",
+		HTTP: true, Path: "/script",
+		Match: func(r string) bool { return strings.Contains(r, "Jenkins") },
+		Vuln:  "Jenkins 疑似未授权(可访问脚本控制台)",
 	},
 	{
 		Service: "jenkins", Port: 8090,
-		HTTP:    true, Path: "/script",
-		Match:   func(r string) bool { return strings.Contains(r, "Jenkins") },
-		Vuln:    "Jenkins 疑似未授权(可访问脚本控制台)",
+		HTTP: true, Path: "/script",
+		Match: func(r string) bool { return strings.Contains(r, "Jenkins") },
+		Vuln:  "Jenkins 疑似未授权(可访问脚本控制台)",
 	},
 	{
 		Service: "hadoop", Port: 8088,
-		HTTP:    true, Path: "/cluster",
-		Match:   func(r string) bool { return strings.Contains(r, "cluster") || strings.Contains(r, "ResourceManager") },
-		Vuln:    "Hadoop YARN 未授权访问(可提交任务/执行代码)",
+		HTTP: true, Path: "/cluster",
+		Match: func(r string) bool { return strings.Contains(r, "cluster") || strings.Contains(r, "ResourceManager") },
+		Vuln:  "Hadoop YARN 未授权访问(可提交任务/执行代码)",
 	},
 }
 
 // mongoIsMaster 构造 MongoDB isMaster 探测报文
 func mongoIsMaster() []byte {
 	bson := []byte{
-		0x11, 0x00, 0x00, 0x00, // 文档长度 17
-		0x10,                                     // int32 类型
+		0x13, 0x00, 0x00, 0x00, // 文档长度 19(4 头 + 1 类型 + 9 键名 + 4 值 + 1 结束)
+		0x10,                                         // int32 类型
 		'i', 's', 'm', 'a', 's', 't', 'e', 'r', 0x00, // "ismaster\0"
 		0x01, 0x00, 0x00, 0x00, // 值 1
 		0x00, // 结束符
 	}
 	coll := append([]byte("admin.$cmd"), 0x00)
-	msgLen := 16 + len(coll) + 8 + len(bson)
+	msgLen := 16 + 4 + len(coll) + 8 + len(bson) // 16 头 + 4 flags + coll + 4 skip + 4 return + bson
 	msg := make([]byte, 0, msgLen)
 	var b4 [4]byte
 	put := func(v int32) {
@@ -143,15 +149,20 @@ func RunPOC(ip string, port int, timeout time.Duration) string {
 		if p.Port != port {
 			continue
 		}
-		var resp string
-		var err error
 		if p.HTTP {
-			resp, err = httpGet(ip, port, p.Path, timeout)
+			// HTTP 探测要求 200, 避免 403/401 错误页含关键词造成误报
+			resp, status := httpDo(ip, port, "GET", p.Path, "", "", timeout)
+			if status != 200 {
+				continue
+			}
+			if p.Match(resp) {
+				return p.Vuln
+			}
 		} else {
-			resp, err = rawProbe(ip, port, p.Payload, timeout)
-		}
-		if err == nil && p.Match(resp) {
-			return p.Vuln
+			resp, err := rawProbe(ip, port, p.Payload, timeout)
+			if err == nil && p.Match(resp) {
+				return p.Vuln
+			}
 		}
 	}
 	return ""
@@ -178,6 +189,9 @@ func rawProbe(ip string, port int, payload []byte, timeout time.Duration) (strin
 }
 
 func httpGet(ip string, port int, path string, timeout time.Duration) (string, error) {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
 	url := fmt.Sprintf("http://%s%s", net.JoinHostPort(ip, itoa(port)), path)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

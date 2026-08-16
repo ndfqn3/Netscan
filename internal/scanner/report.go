@@ -25,14 +25,14 @@ type reportPort struct {
 }
 
 type reportData struct {
-	Title       string
-	Target      string
-	Ports       string
-	Time        string
-	TotalHosts  int
-	OpenPorts   int
-	VulnCount   int
-	Hosts       []reportHost
+	Title      string
+	Target     string
+	Ports      string
+	Time       string
+	TotalHosts int
+	OpenPorts  int
+	VulnCount  int
+	Hosts      []reportHost
 }
 
 const reportTemplate = `<!DOCTYPE html>
@@ -96,9 +96,12 @@ func WriteHTMLReport(path, target, ports string, results []Result) error {
 			}
 		case "os":
 			if h, ok := hostMap[r.IP]; ok {
-				h.OS = r.OS
+				h.OS = r.Version
+				if h.OS == "" {
+					h.OS = r.OS
+				}
 			}
-		case StateOpen:
+		case StateOpen, StateOpenFiltered:
 			openPorts++
 			if r.Vuln != "" {
 				vulnCount++

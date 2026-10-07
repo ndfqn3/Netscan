@@ -2,7 +2,7 @@
 
 一款用 Go 编写的全能网络扫描器，提供 **命令行（CLI）** 与 **图形界面（GUI）** 两种形态，集主机发现、端口扫描、服务识别、OS 识别、漏洞检测、漏洞利用、一键拿 shell、Web 侦察、插件/模块/字典/POC 平台化扩展于一体。
 
-> **v4.1.0 新增**：插件系统五类全落地（poc/exploit/report/output/notification）、远程插件市场、通配符 DNS 过滤、HTTPS 指纹、爆破协议完善（MySQL/PostgreSQL/FTP）、一键拿 shell 多服务利用链、近千个漏洞模块。
+> **v5.0 新增**：nmap 无授权合规整改（指纹替换为 wappalyzergo MIT + nerva Apache-2.0，见 `THIRD_PARTY_NOTICES.md`）；POC 引擎 v3（payloads/变量/索引 DSL/extractors，5,380 条真实 nuclei 模板）；ffuf 融合（`--fuzz-*` 全功能 + GUI 标签页）；PayloadsAllTheThings 内置字典（`builtin:`）；利用链框架（13 条实测通过）；GUI 新增 Web 侦察与模糊测试标签页。
 
 ---
 
@@ -40,10 +40,10 @@
 
 | 功能 | 说明 |
 |------|------|
-| 端口→服务映射 | **nmap top-300 指纹库** |
-| 服务/版本识别 | `-sV`（40+ 探针） |
+| 端口→服务映射 | IANA 服务名注册表 + 通用端口约定（不依赖 nmap 数据） |
+| 服务/版本识别 | `-sV`（40+ 自研正则探针 + **nerva Apache-2.0 兜底**，170+ 协议） |
 | **OS 精确识别** | `-O`：SMB2/NTLM build 号 + 主机名 + 客户端/服务器判定 + SSH banner 发行版映射 |
-| CMS/Web 指纹 | `--fp`（17 种 CMS） |
+| CMS/Web 指纹 | `--fp`（自研 17 种 CMS 规则 + **wappalyzergo MIT** 技术栈识别） |
 | Banner 抓取 | `--banner` |
 | 反向 DNS | `--dns` |
 
@@ -52,8 +52,11 @@
 | 功能 | 说明 |
 |------|------|
 | 未授权访问 POC | `--poc`（13 种：Redis/MongoDB/Docker/ES/Nacos...） |
+| Web POC 批量扫描 | `--poc-scan`（5,380 条真实 nuclei 模板：官方 + AllForOne MIT 子集，支持多请求/raw） |
+| 定向 POC 验证 | `--poc-scan --poc-id <CVE/关键字>`（仅运行 id/name 匹配的模板） |
+| 外带检测(OAST) | `--oast <ip:port>`（内置 HTTP 回调，支持 SSRF/RCE 外带模板；端口 0=随机） |
 | 漏洞利用 | `--exploit <模块>` / `auto` |
-| 利用模块列表 | `--exploit-list`（近 1000 个） |
+| 利用模块列表 | `--exploit-list`（206 个） |
 | 全量漏洞报告 | `--vuln-report`（名称+复现步骤） |
 | 目标漏洞扫描 | `--scan-vuln`（仅命中） |
 | 弱口令爆破 | `--brute`（7 种服务 + 内置字典） |
@@ -74,7 +77,11 @@
 | 功能 | 说明 |
 |------|------|
 | 目录爆破 | `-dir`（180+ 路径） |
-| 子域名爆破 | `-sub --sub-depth` |
+| Web 模糊测试(ffuf 全功能) | `--fuzz-url http://target/FUZZ`：多词表/多关键字、clusterbomb/pitchfork/sniper、Encoder、raw/原始请求文件、延时/限速/超时、匹配与过滤(状态码/大小/词数/行数/正则/耗时)、and/or 组合、自动校准、递归目录、HTTP2/SNI/客户端证书/重放代理、Scraper、审计/调试日志、json/ejson/html/md/csv/ecsv 导出 |
+| 内置 payload 字典 | `--fuzz-w builtin:<名称>`：66 个逐文件许可审计通过的 PayloadsAllTheThings(MIT) 字典，如 `builtin:springboot_actuator`、`builtin:param_miner_lowercase_headers`；GUI「工具→字典」可查看全部 |
+| 子域名爆破(ffuf) | `--fuzz-mode subdomain --fuzz-sub example.com [--fuzz-scheme https] [--fuzz-port 443]`（泛解析自动校准） |
+| 虚拟主机爆破(ffuf) | `--fuzz-mode vhost --fuzz-vhost example.com --fuzz-url http://IP:PORT/`（Host 头 FUZZ 爆破） |
+| 子域名爆破(DNS) | `-sub --sub-depth` |
 | HTTP 安全头检查 | `-web` |
 | Whois / DNS | `-whois` / `-dnsq` |
 
@@ -126,7 +133,7 @@ netscan -target example.com -p 80 --poc --fp --banner -oH report.html
 ### 漏洞检测与利用
 
 ```bash
-netscan -exploit-list                    # 列出所有利用模块(近千个)
+netscan -exploit-list                    # 列出所有利用模块(206 个)
 netscan -vuln-report                     # 输出全量漏洞报告(名称+复现步骤)
 netscan -target 192.168.1.1 -p 80 --scan-vuln   # 扫描目标仅列命中的漏洞
 netscan -target 192.168.1.1 -p 6379 --poc       # 未授权访问检测

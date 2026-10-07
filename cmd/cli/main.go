@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,10 +17,21 @@ import (
 
 	"golang.org/x/term"
 
+	"portscanner/internal/ffufrun"
 	"portscanner/internal/scanner"
 )
 
 var version = "dev"
+
+// repeatFlag 可重复出现的字符串 flag(如 -fuzz-header 多个)
+type repeatFlag []string
+
+func (r *repeatFlag) String() string { return strings.Join(*r, ", ") }
+
+func (r *repeatFlag) Set(v string) error {
+	*r = append(*r, v)
+	return nil
+}
 
 type cliFlags struct {
 	targets        string
@@ -77,6 +89,9 @@ type cliFlags struct {
 	vulnReport     bool
 	scanVuln       bool
 	pocScan        bool
+	pocID          string
+	pocDebug       bool
+	oast           string
 	sshShell       bool
 	sshConnect     bool
 	sshUser        string
@@ -86,6 +101,79 @@ type cliFlags struct {
 	diff           bool
 	showHelp       bool
 	showVersion    bool
+
+	fuzzURL      string
+	fuzzMode     string
+	fuzzSub      string
+	fuzzVhost    string
+	fuzzScheme   string
+	fuzzPort     int
+	fuzzWordlist string
+	fuzzWords    repeatFlag
+	fuzzMethod   string
+	fuzzData     string
+	fuzzHeaders  repeatFlag
+	fuzzCookies  repeatFlag
+	fuzzExt      string
+	fuzzAC       bool
+	fuzzRec      bool
+	fuzzDepth    int
+	fuzzThreads  int
+	fuzzRate     int
+	fuzzTimeout  int
+	fuzzFollow   bool
+	fuzzMC       string
+	fuzzMS       string
+	fuzzMW       string
+	fuzzML       string
+	fuzzMR       string
+	fuzzMT       string
+	fuzzFC       string
+	fuzzFS       string
+	fuzzFW       string
+	fuzzFL       string
+	fuzzFR       string
+	fuzzFT       string
+	fuzzMMode    string
+	fuzzFMode    string
+	fuzzOut      string
+	fuzzFormat   string
+	fuzzODir     string
+	fuzzOSkip    bool
+	fuzzAudit    string
+	fuzzDebug    string
+	fuzzScrapers string
+	fuzzScraperF string
+	fuzzDelay    string
+	fuzzMaxTime  int
+	fuzzMaxTimeJ int
+	fuzzSF       bool
+	fuzzSE       bool
+	fuzzSA       bool
+	fuzzQuiet    bool
+	fuzzJSON     bool
+	fuzzVerbose  bool
+	fuzzRaw      bool
+	fuzzIgnoreB  bool
+	fuzzHTTP2    bool
+	fuzzSNI      string
+	fuzzCC       string
+	fuzzCK       string
+	fuzzReplay   string
+	fuzzRecStrat string
+	fuzzACK      string
+	fuzzACPer    bool
+	fuzzACS      string
+	fuzzACC      string
+	fuzzEnc      string
+	fuzzIC       bool
+	fuzzDSC      bool
+	fuzzInMode   string
+	fuzzInNum    int
+	fuzzInShell  string
+	fuzzInCmd    repeatFlag
+	fuzzRequest  string
+	fuzzReqProto string
 }
 
 func main() {
@@ -155,6 +243,9 @@ func main() {
 	flag.BoolVar(&f.vulnReport, "vuln-report", false, "输出所有可检测漏洞的名称与复现步骤")
 	flag.BoolVar(&f.scanVuln, "scan-vuln", false, "针对目标扫描所有漏洞, 仅输出命中的漏洞+复现步骤")
 	flag.BoolVar(&f.pocScan, "poc-scan", false, "批量扫描 Web POC 模板(内置+自定义), 命中生成漏洞报告")
+	flag.StringVar(&f.pocID, "poc-id", "", "仅运行 id/name 匹配该关键字的 POC(--poc-scan), 用于定向验证")
+	flag.BoolVar(&f.pocDebug, "poc-debug", false, "POC 引擎调试输出(每个请求的状态与响应预览, 用于漏报排查)")
+	flag.StringVar(&f.oast, "oast", "", "HTTP 回调地址(如 192.168.1.10:9999; 端口 0=随机)用于 SSRF/RCE 外带检测, 留空则跳过回调类模板")
 	flag.BoolVar(&f.sshShell, "ssh-shell", false, "SSH 爆破成功后进入交互式 shell")
 	flag.BoolVar(&f.sshConnect, "ssh-connect", false, "用 --ssh-user/--ssh-pass 直接建立交互式 SSH shell")
 	flag.StringVar(&f.sshUser, "ssh-user", "", "SSH 用户名(配合 --ssh-connect)")
@@ -162,6 +253,78 @@ func main() {
 	flag.BoolVar(&f.store, "store", false, "保存扫描结果到资产库")
 	flag.BoolVar(&f.history, "history", false, "查看目标历史扫描记录")
 	flag.BoolVar(&f.diff, "diff", false, "与上次扫描结果对比")
+	flag.StringVar(&f.fuzzURL, "fuzz-url", "", "ffuf 模糊测试: 含 FUZZ 的 URL, 如 http://target/FUZZ")
+	flag.StringVar(&f.fuzzWordlist, "fuzz-wordlist", "", "ffuf 字典文件(留空用内置目录字典; 多词表/关键字请用 --fuzz-w)")
+	flag.Var(&f.fuzzWords, "fuzz-w", "ffuf 词表(可重复): 'file' 或 'file:KEYWORD' 或 'builtin:<内置字典名>'")
+	flag.StringVar(&f.fuzzMode, "fuzz-mode", "", "ffuf 模式: url(默认)/subdomain/vhost")
+	flag.StringVar(&f.fuzzSub, "fuzz-sub", "", "子域名爆破根域名(生成 http://FUZZ.<domain>, 自动校准通配 DNS)")
+	flag.StringVar(&f.fuzzVhost, "fuzz-vhost", "", "虚拟主机爆破域名(注入 Host: FUZZ.<domain>; 配合 --fuzz-url http://IP:PORT/)")
+	flag.StringVar(&f.fuzzScheme, "fuzz-scheme", "http", "子域名模式协议: http/https")
+	flag.IntVar(&f.fuzzPort, "fuzz-port", 0, "子域名/虚拟主机模式端口(0=默认)")
+	flag.StringVar(&f.fuzzMethod, "fuzz-method", "", "ffuf HTTP 方法(默认 GET)")
+	flag.StringVar(&f.fuzzData, "fuzz-data", "", "ffuf POST 数据(可含 FUZZ)")
+	flag.Var(&f.fuzzHeaders, "fuzz-header", "ffuf 自定义请求头(可重复): 'X-A: 1'")
+	flag.Var(&f.fuzzCookies, "fuzz-cookie", "ffuf Cookie(可重复)")
+	flag.StringVar(&f.fuzzExt, "fuzz-ext", "", "ffuf 扩展名枚举: .php,.bak 等")
+	flag.BoolVar(&f.fuzzAC, "fuzz-ac", false, "ffuf 自动校准(过滤软 404/动态页面/泛解析)")
+	flag.BoolVar(&f.fuzzRec, "fuzz-recursion", false, "ffuf 递归扫描命中目录")
+	flag.IntVar(&f.fuzzDepth, "fuzz-depth", 2, "ffuf 递归深度")
+	flag.StringVar(&f.fuzzRecStrat, "fuzz-rec-strategy", "", "ffuf 递归策略: default(302 跳转)/greedy(全部命中)")
+	flag.IntVar(&f.fuzzThreads, "fuzz-t", 40, "ffuf 线程数")
+	flag.IntVar(&f.fuzzRate, "fuzz-rate", 0, "ffuf 每秒请求上限(0=不限)")
+	flag.StringVar(&f.fuzzDelay, "fuzz-delay", "", "ffuf 请求间隔秒数或随机范围: 0.1 / 0.1-2.0")
+	flag.IntVar(&f.fuzzTimeout, "fuzz-timeout", 10, "ffuf 单请求超时(秒)")
+	flag.BoolVar(&f.fuzzFollow, "fuzz-follow", false, "ffuf 跟随重定向")
+	flag.IntVar(&f.fuzzMaxTime, "fuzz-maxtime", 0, "ffuf 整体最长运行秒数(0=不限)")
+	flag.IntVar(&f.fuzzMaxTimeJ, "fuzz-maxtime-job", 0, "ffuf 单 job 最长运行秒数(0=不限)")
+	flag.BoolVar(&f.fuzzSF, "fuzz-sf", false, "ffuf 大量 403 时停止(>95%)")
+	flag.BoolVar(&f.fuzzSE, "fuzz-se", false, "ffuf 出现异常错误时停止")
+	flag.BoolVar(&f.fuzzSA, "fuzz-sa", false, "ffuf 所有错误场景停止(隐含 sf/se)")
+	flag.BoolVar(&f.fuzzQuiet, "fuzz-quiet", false, "ffuf 静默模式")
+	flag.BoolVar(&f.fuzzVerbose, "fuzz-v", false, "ffuf 详细输出(完整 URL 与跳转位置)")
+	flag.BoolVar(&f.fuzzJSON, "fuzz-json", false, "ffuf 结果按 JSON 行输出")
+	flag.BoolVar(&f.fuzzRaw, "fuzz-raw", false, "ffuf 不编码 URI")
+	flag.BoolVar(&f.fuzzIgnoreB, "fuzz-ignore-body", false, "ffuf 不读取响应体")
+	flag.BoolVar(&f.fuzzHTTP2, "fuzz-http2", false, "ffuf 使用 HTTP/2")
+	flag.StringVar(&f.fuzzSNI, "fuzz-sni", "", "ffuf TLS SNI")
+	flag.StringVar(&f.fuzzCC, "fuzz-cc", "", "ffuf 客户端证书文件")
+	flag.StringVar(&f.fuzzCK, "fuzz-ck", "", "ffuf 客户端私钥文件")
+	flag.StringVar(&f.fuzzReplay, "fuzz-replay-proxy", "", "ffuf 命中请求重放代理")
+	flag.StringVar(&f.fuzzMMode, "fuzz-mmode", "", "ffuf 匹配器组合: and/or")
+	flag.StringVar(&f.fuzzFMode, "fuzz-fmode", "", "ffuf 过滤器组合: and/or")
+	flag.StringVar(&f.fuzzMC, "fuzz-mc", "", "ffuf 状态码匹配(如 200,204,301 或 all)")
+	flag.StringVar(&f.fuzzMS, "fuzz-ms", "", "ffuf 响应大小匹配")
+	flag.StringVar(&f.fuzzMW, "fuzz-mw", "", "ffuf 词数匹配")
+	flag.StringVar(&f.fuzzML, "fuzz-ml", "", "ffuf 行数匹配")
+	flag.StringVar(&f.fuzzMR, "fuzz-mr", "", "ffuf 正则匹配")
+	flag.StringVar(&f.fuzzMT, "fuzz-mt", "", "ffuf 响应耗时匹配: >100 / <100 (ms)")
+	flag.StringVar(&f.fuzzFC, "fuzz-fc", "", "ffuf 状态码过滤")
+	flag.StringVar(&f.fuzzFS, "fuzz-fs", "", "ffuf 响应大小过滤")
+	flag.StringVar(&f.fuzzFW, "fuzz-fw", "", "ffuf 词数过滤")
+	flag.StringVar(&f.fuzzFL, "fuzz-fl", "", "ffuf 行数过滤")
+	flag.StringVar(&f.fuzzFR, "fuzz-fr", "", "ffuf 正则过滤")
+	flag.StringVar(&f.fuzzFT, "fuzz-ft", "", "ffuf 响应耗时过滤: >100 / <100 (ms)")
+	flag.StringVar(&f.fuzzACK, "fuzz-ac-keyword", "", "ffuf 自动校准关键字(默认 FUZZ)")
+	flag.BoolVar(&f.fuzzACPer, "fuzz-ac-perhost", false, "ffuf 按主机自动校准")
+	flag.StringVar(&f.fuzzACS, "fuzz-ac-strategies", "", "ffuf 自动校准策略(逗号分隔: basic,advanced)")
+	flag.StringVar(&f.fuzzACC, "fuzz-ac-strings", "", "ffuf 自定义自动校准字符串(逗号分隔)")
+	flag.StringVar(&f.fuzzEnc, "fuzz-enc", "", "ffuf 关键字编码器: 'FUZZ:urlencode b64encode'")
+	flag.BoolVar(&f.fuzzIC, "fuzz-ic", false, "ffuf 忽略字典注释行(#)")
+	flag.BoolVar(&f.fuzzDSC, "fuzz-D", false, "ffuf DirSearch 字典兼容模式")
+	flag.StringVar(&f.fuzzInMode, "fuzz-input-mode", "", "ffuf 多字典模式: clusterbomb/pitchfork/sniper")
+	flag.IntVar(&f.fuzzInNum, "fuzz-input-num", 0, "ffuf 命令输入模式的数量")
+	flag.StringVar(&f.fuzzInShell, "fuzz-input-shell", "", "ffuf 命令输入模式的 shell")
+	flag.Var(&f.fuzzInCmd, "fuzz-input-cmd", "ffuf 命令输入(可重复, 需 --fuzz-input-num)")
+	flag.StringVar(&f.fuzzRequest, "fuzz-request", "", "ffuf 原始 HTTP 请求文件")
+	flag.StringVar(&f.fuzzReqProto, "fuzz-request-proto", "", "ffuf 原始请求协议: http/https")
+	flag.StringVar(&f.fuzzOut, "fuzz-o", "", "ffuf 结果输出文件")
+	flag.StringVar(&f.fuzzFormat, "fuzz-of", "", "ffuf 输出格式: json/ejson/html/md/csv/ecsv/all")
+	flag.StringVar(&f.fuzzODir, "fuzz-od", "", "ffuf 命中原始响应保存目录")
+	flag.BoolVar(&f.fuzzOSkip, "fuzz-or", false, "ffuf 无结果时不创建输出文件")
+	flag.StringVar(&f.fuzzAudit, "fuzz-audit-log", "", "ffuf 审计日志文件(记录所有请求/响应)")
+	flag.StringVar(&f.fuzzDebug, "fuzz-debug-log", "", "ffuf 调试日志文件")
+	flag.StringVar(&f.fuzzScrapers, "fuzz-scrapers", "", "ffuf 启用的 Scraper 组(默认 all)")
+	flag.StringVar(&f.fuzzScraperF, "fuzz-scraper-file", "", "ffuf 自定义 Scraper 文件")
 	flag.BoolVar(&f.showHelp, "h", false, "显示帮助")
 	flag.BoolVar(&f.showVersion, "version", false, "显示版本号")
 	flag.Parse()
@@ -171,12 +334,31 @@ func main() {
 		scanner.SetMarketURL(strings.TrimRight(f.pluginMarket, "/"))
 	}
 
+	// POC 调试输出
+	if f.pocDebug {
+		scanner.SetPOCDebug(func(format string, args ...interface{}) {
+			fmt.Fprintf(os.Stderr, "[poc] "+format+"\n", args...)
+		})
+	}
+
+	// OAST 回调监听(SSRF/RCE 外带检测)
+	if f.oast != "" {
+		if err := scanner.StartOAST(f.oast); err != nil {
+			fmt.Fprintf(os.Stderr, "启动 OAST 回调监听失败: %v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "OAST 回调已启用: %s\n", f.oast)
+		}
+	}
+
 	if f.showVersion {
 		fmt.Printf("NetScan %s\n", version)
 		os.Exit(0)
 	}
 
 	if f.exploitList {
+		for _, n := range scanner.ExploitChainList() {
+			fmt.Println(n)
+		}
 		for _, n := range scanner.ExploitList() {
 			fmt.Println(n)
 		}
@@ -190,6 +372,12 @@ func main() {
 	// 反弹 shell 生成(无需目标)
 	if f.shell != "" {
 		runShellGen(f)
+		return
+	}
+
+	// ffuf 模糊测试(无需 --target)
+	if f.fuzzURL != "" || f.fuzzSub != "" || f.fuzzVhost != "" || f.fuzzRequest != "" {
+		runFuzz(f)
 		return
 	}
 
@@ -760,6 +948,17 @@ func runExploit(f cliFlags) {
 	if port == 0 {
 		port = defaultServicePort(f.exploit)
 	}
+	// 优先使用真实利用链(执行攻击动作并给出可验证证据)
+	if f.exploit != "auto" {
+		if ok, proof, exists := scanner.RunExploitChain(f.exploit, ip, port, 8*time.Second); exists {
+			if ok {
+				fmt.Printf("[利用链成功] %s %s:%d\n%s\n", f.exploit, ip, port, proof)
+			} else {
+				fmt.Printf("[利用链失败] %s %s:%d (目标可能不可达或已修复)\n", f.exploit, ip, port)
+			}
+			return
+		}
+	}
 	var result string
 	if f.exploit == "auto" {
 		result = scanner.AutoExploit(ip, port, "", 5*time.Second)
@@ -811,7 +1010,13 @@ func runPocScan(f cliFlags) {
 	}
 	port := firstPort(f.ports, 80)
 	fmt.Fprintf(os.Stderr, "扫描 Web POC: %s:%d ...\n", ip, port)
-	hits := scanner.ScanPOCs(ip, port, 3*time.Second)
+	var hits []scanner.VulnHit
+	if f.pocID != "" {
+		fmt.Fprintf(os.Stderr, "POC 过滤关键字: %s\n", f.pocID)
+		hits = scanner.ScanPOCsFiltered(ip, port, 3*time.Second, f.pocID)
+	} else {
+		hits = scanner.ScanPOCs(ip, port, 3*time.Second)
+	}
 	if len(hits) == 0 {
 		fmt.Println("未命中任何 POC")
 		return
@@ -820,6 +1025,97 @@ func runPocScan(f cliFlags) {
 	for _, h := range hits {
 		fmt.Printf("● %s\n  复现步骤: %s\n\n", h.Name, h.Steps)
 	}
+}
+
+// runFuzz ffuf 模糊测试: 目录/参数/子域名/虚拟主机 fuzz, 自动校准过滤软 404
+func runFuzz(f cliFlags) {
+	mode := strings.ToLower(strings.TrimSpace(f.fuzzMode))
+	if mode == "子域名" {
+		mode = "subdomain"
+	}
+	if mode == "虚拟主机" {
+		mode = "vhost"
+	}
+	cfg := ffufrun.Config{
+		Mode: mode, Subdomain: f.fuzzSub, VHost: f.fuzzVhost,
+		Scheme: f.fuzzScheme, Port: f.fuzzPort,
+		URL: f.fuzzURL, Method: f.fuzzMethod, Data: f.fuzzData,
+		Headers: []string(f.fuzzHeaders), Cookies: []string(f.fuzzCookies),
+		Extensions: f.fuzzExt, Threads: f.fuzzThreads, Rate: f.fuzzRate,
+		Timeout: f.fuzzTimeout, Follow: f.fuzzFollow, Proxy: f.proxy,
+		AutoCalibration: f.fuzzAC, Recursion: f.fuzzRec, RecursionDepth: f.fuzzDepth,
+		RecursionStrategy: f.fuzzRecStrat,
+		MC:                f.fuzzMC, MS: f.fuzzMS, MW: f.fuzzMW, ML: f.fuzzML, MR: f.fuzzMR, MT: f.fuzzMT,
+		FC: f.fuzzFC, FS: f.fuzzFS, FW: f.fuzzFW, FL: f.fuzzFL, FR: f.fuzzFR, FT: f.fuzzFT,
+		MatcherMode: f.fuzzMMode, FilterMode: f.fuzzFMode,
+		Delay: f.fuzzDelay, MaxTime: f.fuzzMaxTime, MaxTimeJob: f.fuzzMaxTimeJ,
+		StopOn403: f.fuzzSF, StopOnAll: f.fuzzSA, StopOnErrors: f.fuzzSE,
+		Quiet: f.fuzzQuiet, Verbose: f.fuzzVerbose, JSON: f.fuzzJSON,
+		RawHTTP: f.fuzzRaw, IgnoreBody: f.fuzzIgnoreB, HTTP2: f.fuzzHTTP2,
+		SNI: f.fuzzSNI, ClientCert: f.fuzzCC, ClientKey: f.fuzzCK,
+		ReplayProxyURL:         f.fuzzReplay,
+		AutoCalibrationKeyword: f.fuzzACK, AutoCalibrationPerHost: f.fuzzACPer,
+		InputMode: f.fuzzInMode, InputNum: f.fuzzInNum, InputShell: f.fuzzInShell,
+		InputCommands: []string(f.fuzzInCmd), Request: f.fuzzRequest, RequestProto: f.fuzzReqProto,
+		IgnoreWordlistComments: f.fuzzIC, DirSearchCompat: f.fuzzDSC,
+		OutputFile: f.fuzzOut, OutputFormat: f.fuzzFormat,
+		OutputDirectory: f.fuzzODir, OutputSkipEmptyFile: f.fuzzOSkip,
+		AuditLog: f.fuzzAudit, DebugLog: f.fuzzDebug,
+		Scrapers: f.fuzzScrapers, ScraperFile: f.fuzzScraperF,
+	}
+	// 多词表 + 兼容单字段
+	if f.fuzzWordlist != "" {
+		cfg.Wordlists = append(cfg.Wordlists, f.fuzzWordlist)
+	}
+	cfg.Wordlists = append(cfg.Wordlists, []string(f.fuzzWords)...)
+	if len(cfg.Wordlists) == 0 && cfg.Request == "" && len(cfg.InputCommands) == 0 {
+		words := scanner.DefaultDirWordlist()
+		p := filepath.Join(os.TempDir(), "netscan_fuzz_wordlist.txt")
+		if err := os.WriteFile(p, []byte(strings.Join(words, "\n")+"\n"), 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "写入内置字典失败: %v\n", err)
+			os.Exit(1)
+		}
+		cfg.Wordlists = append(cfg.Wordlists, p)
+		fmt.Fprintf(os.Stderr, "未指定字典, 使用内置目录字典(%d 条): %s\n", len(words), p)
+	}
+	if f.fuzzACS != "" {
+		cfg.AutoCalibrationStrategies = strings.Split(f.fuzzACS, ",")
+	}
+	if f.fuzzACC != "" {
+		cfg.AutoCalibrationStrings = strings.Split(f.fuzzACC, ",")
+	}
+	// 模式前置校验(ffuf 侧也需要 URL/请求文件)
+	if cfg.Mode == "subdomain" && cfg.Subdomain == "" {
+		fmt.Fprintln(os.Stderr, "--fuzz-mode subdomain 需要 --fuzz-sub <根域名>")
+		os.Exit(1)
+	}
+	if cfg.Mode == "vhost" && (cfg.VHost == "" || cfg.URL == "") {
+		fmt.Fprintln(os.Stderr, "--fuzz-mode vhost 需要 --fuzz-vhost <域名> 与 --fuzz-url http://IP:PORT/")
+		os.Exit(1)
+	}
+	if cfg.Mode != "subdomain" && cfg.Mode != "vhost" && cfg.URL == "" && cfg.Request == "" {
+		fmt.Fprintln(os.Stderr, "URL 必须包含 FUZZ 关键字, 如 http://target/FUZZ (或指定 --fuzz-sub/--fuzz-vhost)")
+		os.Exit(1)
+	}
+	if cfg.URL != "" && cfg.Mode != "subdomain" && !strings.Contains(cfg.URL, "FUZZ") && cfg.VHost == "" {
+		fmt.Fprintln(os.Stderr, "URL 必须包含 FUZZ 关键字, 如 http://target/FUZZ")
+		os.Exit(1)
+	}
+	target := cfg.URL
+	if cfg.Mode == "subdomain" {
+		target = ffufrun.BuildURL(&cfg)
+		fmt.Fprintf(os.Stderr, "子域名爆破: FUZZ.%s (自动校准通配 DNS)\n", cfg.Subdomain)
+	}
+	if cfg.Mode == "vhost" {
+		fmt.Fprintf(os.Stderr, "虚拟主机爆破: Host: FUZZ.%s -> %s\n", cfg.VHost, cfg.URL)
+	}
+	fmt.Fprintf(os.Stderr, "ffuf 模糊测试: %s\n", target)
+	r, err := ffufrun.Run(cfg, func(s string) { fmt.Println(s) })
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "启动 ffuf 失败: %v\n", err)
+		os.Exit(1)
+	}
+	r.Wait()
 }
 
 // runScanVuln 针对目标扫描所有漏洞, 仅输出命中的漏洞+复现步骤

@@ -1,0 +1,547 @@
+// Copyright 2022 Praetorian Security, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package scan
+
+import (
+	"bytes"
+	"crypto/tls"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/praetorian-inc/nerva/pkg/plugins"
+)
+
+var dialer = &net.Dialer{
+	Timeout: 2 * time.Second,
+}
+
+// Package-level proxy dialer cache for performance
+var (
+	proxyDialerCache    *ProxyDialer
+	proxyDialerCacheKey string
+	proxyDialerMutex    sync.RWMutex
+)
+
+var sortedTCPPlugins = make([]plugins.Plugin, 0)
+var sortedTCPTLSPlugins = make([]plugins.Plugin, 0)
+var sortedUDPPlugins = make([]plugins.Plugin, 0)
+var sortedSCTPPlugins = make([]plugins.Plugin, 0)
+var tlsConfig = tls.Config{} //nolint:gosec
+
+// prefixConn wraps a net.Conn to replay previously-read bytes (a banner)
+// before subsequent reads, enabling connection reuse after ReadBanner.
+type prefixConn struct {
+	net.Conn
+	reader io.Reader
+}
+
+func (c *prefixConn) Read(b []byte) (int, error) {
+	return c.reader.Read(b)
+}
+
+func (c *prefixConn) Unwrap() net.Conn {
+	return c.Conn
+}
+
+func newPrefixConn(conn net.Conn, prefix []byte) net.Conn {
+	return &prefixConn{
+		Conn:   conn,
+		reader: io.MultiReader(bytes.NewReader(prefix), conn),
+	}
+}
+
+func init() {
+	setupPlugins()
+	cipherSuites := make([]uint16, 0)
+
+	for _, suite := range tls.CipherSuites() {
+		cipherSuites = append(cipherSuites, suite.ID)
+	}
+
+	for _, suite := range tls.InsecureCipherSuites() {
+		cipherSuites = append(cipherSuites, suite.ID)
+	}
+	tlsConfig.InsecureSkipVerify = true //nolint:gosec
+	tlsConfig.CipherSuites = cipherSuites
+	tlsConfig.MinVersion = tls.VersionTLS10
+	tlsConfig.Renegotiation = tls.RenegotiateFreelyAsClient
+}
+
+func setupPlugins() {
+	if len(sortedTCPPlugins) > 0 {
+		// already sorted
+		return
+	}
+
+	sortedTCPPlugins = append(sortedTCPPlugins, plugins.Plugins[plugins.TCP]...)
+	sortedTCPTLSPlugins = append(sortedTCPTLSPlugins, plugins.Plugins[plugins.TCPTLS]...)
+	sortedUDPPlugins = append(sortedUDPPlugins, plugins.Plugins[plugins.UDP]...)
+	sortedSCTPPlugins = append(sortedSCTPPlugins, plugins.Plugins[plugins.SCTP]...)
+
+	sort.Slice(sortedTCPPlugins, func(i, j int) bool {
+		return sortedTCPPlugins[i].Priority() < sortedTCPPlugins[j].Priority()
+	})
+	sort.Slice(sortedUDPPlugins, func(i, j int) bool {
+		return sortedUDPPlugins[i].Priority() < sortedUDPPlugins[j].Priority()
+	})
+	sort.Slice(sortedTCPTLSPlugins, func(i, j int) bool {
+		return sortedTCPTLSPlugins[i].Priority() < sortedTCPTLSPlugins[j].Priority()
+	})
+	sort.Slice(sortedSCTPPlugins, func(i, j int) bool {
+		return sortedSCTPPlugins[i].Priority() < sortedSCTPPlugins[j].Priority()
+	})
+}
+
+// UDP Scan of the target
+func (c *Config) UDPScanTarget(target plugins.Target) (*plugins.Service, error) {
+	if err := c.normalizeDepth(); err != nil {
+		return nil, err
+	}
+
+	// first check the default port mappings for TCP / TLS
+	for _, plugin := range sortedUDPPlugins {
+		port := target.Address.Port()
+		if plugin.PortPriority(port) {
+			conn, err := c.DialUDP(target)
+			if err != nil {
+				return nil, fmt.Errorf("unable to connect, err = %w", err)
+			}
+			result, err := simplePluginRunner(conn, target, c, plugin)
+			if err != nil && c.Verbose {
+				log.Printf("error: %v scanning %v\n", err, target.Address.String())
+			}
+			if result != nil && err == nil {
+				return result, nil
+			}
+		}
+	}
+
+	// if we're fast mode, return (because fast mode only checks the default port service mapping)
+	if c.FastMode {
+		return nil, nil
+	}
+
+	// Banner pre-filtering is not applicable: UDP is connectionless; servers
+	// require a client probe before responding, so no server banner exists to pre-read.
+	for _, plugin := range sortedUDPPlugins {
+		conn, err := c.DialUDP(target)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect, err = %w", err)
+		}
+		result, err := simplePluginRunner(conn, target, c, plugin)
+		if result != nil && err == nil {
+			return result, nil
+		}
+	}
+	return nil, nil
+}
+
+// SCTPScanTarget performs SCTP scanning of the target.
+// On Linux: Full SCTP features via kernel module.
+// On other platforms: Returns error (SCTP not supported).
+func (c *Config) SCTPScanTarget(target plugins.Target) (*plugins.Service, error) {
+	if err := c.normalizeDepth(); err != nil {
+		return nil, err
+	}
+
+	ip := target.Address.Addr().String()
+	port := target.Address.Port()
+
+	// First check default port mappings
+	for _, plugin := range sortedSCTPPlugins {
+		if plugin.PortPriority(port) {
+			conn, err := DialSCTP(ip, port)
+			if err != nil {
+				return nil, fmt.Errorf("SCTP connection failed: %w", err)
+			}
+			result, err := simplePluginRunner(conn, target, c, plugin)
+			if err != nil && c.Verbose {
+				log.Printf("error: %v scanning %v\n", err, target.Address.String())
+			}
+			if result != nil && err == nil {
+				return result, nil
+			}
+		}
+	}
+
+	// Fast mode: only check default port mappings
+	if c.FastMode {
+		return nil, nil
+	}
+
+	// Slow scan: try all SCTP plugins.
+	// Banner pre-filtering is not applicable: SCTP is connection-oriented but
+	// SetReadDeadline is unsupported on Linux SCTP sockets, which ReadBanner depends on.
+	for _, plugin := range sortedSCTPPlugins {
+		conn, err := DialSCTP(ip, port)
+		if err != nil {
+			return nil, fmt.Errorf("SCTP connection failed: %w", err)
+		}
+		result, err := simplePluginRunner(conn, target, c, plugin)
+		if result != nil && err == nil {
+			return result, nil
+		}
+	}
+
+	return nil, nil
+}
+
+// simpleScanTarget attempts to identify the service that is running on a given
+// port. The fingerprinter supports two modes of operation referred to as the
+// fast lane and slow lane. The fast lane aims to be as fast as possible and
+// only attempts to fingerprint services by mapping them to their default port.
+// The slow lane isn't as focused on performance and instead tries to be as
+// accurate as possible.
+
+func (c *Config) SimpleScanTarget(target plugins.Target) ([]*plugins.Service, error) {
+	if err := c.normalizeDepth(); err != nil {
+		return nil, err
+	}
+
+	port := target.Address.Port()
+
+	// first check the default port mappings for TCP / TLS
+	for _, plugin := range sortedTCPPlugins {
+		if !plugin.PortPriority(port) {
+			continue
+		}
+
+		conn, err := c.DialTCP(target)
+		if err != nil {
+			return nil, fmt.Errorf("unable to connect, err = %w", err)
+		}
+		result, err := simplePluginRunner(conn, target, c, plugin)
+		if err != nil && c.Verbose {
+			log.Printf("error: %v scanning %v\n", err, target.Address.String())
+		}
+		if result != nil && err == nil {
+			return []*plugins.Service{result}, nil
+		}
+	}
+
+	tlsConn, tlsErr := c.DialTLS(target)
+	isTLS := tlsErr == nil
+	if isRemoteTLSAlert(tlsErr) {
+		// A peer TLS alert proves the port uses TLS, so skip plaintext probes.
+		if c.Verbose {
+			log.Printf("%v %v-> peer rejected TLS handshake; skipping plaintext probes\n",
+				target.Address.String(), target.Host)
+		}
+		return nil, nil
+	}
+	if isTLS {
+		for _, plugin := range sortedTCPTLSPlugins {
+			if !plugin.PortPriority(port) {
+				continue
+			}
+
+			result, err := simplePluginRunner(tlsConn, target, c, plugin)
+			if err != nil && c.Verbose {
+				log.Printf("error: %v scanning %v\n", err, target.Address.String())
+			}
+			if result != nil && err == nil {
+				return []*plugins.Service{result}, nil
+			}
+
+			tlsConn, err = c.DialTLS(target)
+			if err != nil {
+				return nil, fmt.Errorf("error connecting via TLS, err = %w", err)
+			}
+		}
+	}
+
+	// if we're fast mode, return (because fast mode only checks the default port service mapping)
+	if c.FastMode {
+		return nil, nil
+	}
+
+	// Slow lane: pre-read banner to narrow plugin candidates before iterating.
+
+	if isTLS {
+		tlsCandidates := sortedTCPTLSPlugins
+		var firstTLSConn net.Conn
+
+		if bannerConn, dialErr := c.DialTLS(target); dialErr == nil {
+			banner, bannerErr := ReadBanner(bannerConn, 0)
+			family := ClassifyBanner(banner)
+			if c.Verbose {
+				log.Printf("%v %v-> TLS banner pre-read: family=%s (%d bytes)\n",
+					target.Address.String(), target.Host, family, len(banner))
+			}
+			if family != ProtocolFamilyUnknown {
+				tlsCandidates = FilterPluginsByFamily(sortedTCPTLSPlugins, family)
+			}
+			if family != ProtocolFamilyUnknown && len(banner) > 0 && bannerErr == nil {
+				_ = bannerConn.SetReadDeadline(time.Time{})
+				firstTLSConn = newPrefixConn(bannerConn, banner)
+			} else {
+				bannerConn.Close()
+			}
+		}
+
+		for i, plugin := range tlsCandidates {
+			var conn net.Conn
+			var err error
+			if i == 0 && firstTLSConn != nil {
+				conn = firstTLSConn
+				firstTLSConn = nil
+			} else {
+				conn, err = c.DialTLS(target)
+				if err != nil {
+					return nil, fmt.Errorf("error connecting via TLS, err = %w", err)
+				}
+			}
+			result, err := simplePluginRunner(conn, target, c, plugin)
+			if err != nil && c.Verbose {
+				log.Printf("error: %v scanning %v\n", err, target.Address.String())
+			}
+			if result != nil && err == nil {
+				return []*plugins.Service{result}, nil
+			}
+		}
+	} else {
+		tcpCandidates := sortedTCPPlugins
+		var firstConn net.Conn
+
+		if bannerConn, dialErr := c.DialTCP(target); dialErr == nil {
+			banner, bannerErr := ReadBanner(bannerConn, 0)
+			family := ClassifyBanner(banner)
+			if c.Verbose {
+				log.Printf("%v %v-> banner pre-read: family=%s (%d bytes)\n",
+					target.Address.String(), target.Host, family, len(banner))
+			}
+			if family != ProtocolFamilyUnknown {
+				tcpCandidates = FilterPluginsByFamily(sortedTCPPlugins, family)
+			}
+			if family != ProtocolFamilyUnknown && len(banner) > 0 && bannerErr == nil {
+				_ = bannerConn.SetReadDeadline(time.Time{})
+				firstConn = newPrefixConn(bannerConn, banner)
+			} else {
+				bannerConn.Close()
+			}
+		}
+
+		for i, plugin := range tcpCandidates {
+			var conn net.Conn
+			var err error
+			if i == 0 && firstConn != nil {
+				conn = firstConn
+				firstConn = nil
+			} else {
+				conn, err = c.DialTCP(target)
+				if err != nil {
+					return nil, fmt.Errorf("unable to connect, err = %w", err)
+				}
+			}
+			result, err := simplePluginRunner(conn, target, c, plugin)
+			if err != nil && c.Verbose {
+				log.Printf("error: %v scanning %v\n", err, target.Address.String())
+			}
+			if result != nil && err == nil {
+				return []*plugins.Service{result}, nil
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+// isRemoteTLSAlert reports whether crypto/tls received a valid peer alert.
+func isRemoteTLSAlert(err error) bool {
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr.Op == "remote error"
+}
+
+// This will attempt to close the provided Conn after running the plugin.
+func simplePluginRunner(
+	conn net.Conn,
+	target plugins.Target,
+	config *Config,
+	plugin plugins.Plugin,
+) (*plugins.Service, error) {
+	defer conn.Close()
+
+	// Log probe start.
+	if config.Verbose {
+		log.Printf("%v %v-> scanning %v\n",
+			target.Address.String(),
+			target.Host,
+			plugins.CreatePluginID(plugin),
+		)
+	}
+
+	target.Misconfigs = config.Misconfigs
+	target.Deep = config.Deep
+	result, err := plugin.Run(conn, config.DefaultTimeout, target)
+
+	// Log probe completion.
+	if config.Verbose {
+		log.Printf(
+			"%v %v-> completed %v\n",
+			target.Address.String(),
+			target.Host,
+			plugins.CreatePluginID(plugin),
+		)
+	}
+	return result, err
+}
+
+// getProxyDialer returns a cached ProxyDialer or creates a new one.
+// This improves performance by avoiding repeated ProxyDialer creation.
+func (c *Config) getProxyDialer() (*ProxyDialer, error) {
+	if c.Proxy == "" {
+		return nil, nil
+	}
+
+	// Create cache key from proxy URL and auth
+	cacheKey := c.Proxy + "|" + c.ProxyAuth
+
+	// Fast path: check if cached dialer matches current config
+	proxyDialerMutex.RLock()
+	if proxyDialerCache != nil && proxyDialerCacheKey == cacheKey {
+		cached := proxyDialerCache
+		proxyDialerMutex.RUnlock()
+		return cached, nil
+	}
+	proxyDialerMutex.RUnlock()
+
+	// Slow path: create new dialer and cache it
+	proxyDialerMutex.Lock()
+	defer proxyDialerMutex.Unlock()
+
+	// Double-check after acquiring write lock
+	if proxyDialerCache != nil && proxyDialerCacheKey == cacheKey {
+		return proxyDialerCache, nil
+	}
+
+	pd, err := NewProxyDialer(*c)
+	if err != nil {
+		return nil, err
+	}
+
+	proxyDialerCache = pd
+	proxyDialerCacheKey = cacheKey
+	return pd, nil
+}
+
+func (c *Config) DialTLS(target plugins.Target) (net.Conn, error) {
+	config := &tlsConfig
+	if target.Host != "" {
+		// make a new config clone to add the custom host for each new tls connection
+		cfg := config.Clone()
+		cfg.ServerName = target.Host
+		config = cfg
+	}
+
+	ip := target.Address.Addr().String()
+	port := target.Address.Port()
+	dialHost := ip
+	if ip == "0.0.0.0" && target.Host != "" {
+		dialHost = target.Host
+	}
+
+	// Use ProxyDialer for TLS if proxy is configured
+	if c.Proxy != "" {
+		pd, err := c.getProxyDialer()
+		if err != nil {
+			return nil, err
+		}
+		return pd.DialTLS(dialHost, port, config)
+	}
+
+	// Non-proxy path: Dial TCP first, then wrap with TLS Client
+	conn, err := c.DialTCP(target)
+	if err != nil {
+		return nil, err
+	}
+
+	tlsConn := tls.Client(conn, config)
+	_ = conn.SetDeadline(time.Now().Add(c.DefaultTimeout))
+	err = tlsConn.Handshake()
+	_ = conn.SetDeadline(time.Time{})
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	return tlsConn, nil
+}
+
+func resolveLocalFallback(host string, port uint16, network string, d *net.Dialer) (net.Conn, error) {
+	addrs, err := net.LookupIP(host)
+	if err != nil {
+		return nil, fmt.Errorf("fallback dns resolution failed for %s: %w", host, err)
+	}
+	var lastErr error
+	for _, ip := range addrs {
+		addr := net.JoinHostPort(ip.String(), fmt.Sprintf("%d", port))
+		conn, err := d.Dial(network, addr)
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+func (c *Config) DialTCP(target plugins.Target) (net.Conn, error) {
+	ip := target.Address.Addr().String()
+	port := target.Address.Port()
+
+	dialHost := ip
+	if ip == "0.0.0.0" && target.Host != "" {
+		dialHost = target.Host
+	}
+
+	if c.Proxy != "" {
+		// Use cached proxy dialer for performance
+		pd, err := c.getProxyDialer()
+		if err != nil {
+			return nil, err
+		}
+		return pd.DialTCP(dialHost, port)
+	}
+
+	addr := net.JoinHostPort(dialHost, fmt.Sprintf("%d", port))
+	return dialer.Dial("tcp", addr)
+}
+
+func (c *Config) DialUDP(target plugins.Target) (net.Conn, error) {
+	ip := target.Address.Addr().String()
+	port := target.Address.Port()
+
+	dialHost := ip
+	if ip == "0.0.0.0" && target.Host != "" {
+		dialHost = target.Host
+	}
+
+	if c.Proxy != "" {
+		// Use cached proxy dialer for performance
+		pd, err := c.getProxyDialer()
+		if err != nil {
+			return nil, err
+		}
+		return pd.DialUDP(dialHost, port)
+	}
+
+	addr := net.JoinHostPort(dialHost, fmt.Sprintf("%d", port))
+	return dialer.Dial("udp", addr)
+}

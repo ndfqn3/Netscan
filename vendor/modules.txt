@@ -2,24 +2,246 @@
 ## explicit; go 1.24.0
 filippo.io/edwards25519
 filippo.io/edwards25519/field
+# github.com/PuerkitoBio/goquery v1.13.0
+## explicit; go 1.25.0
+github.com/PuerkitoBio/goquery
+# github.com/adrg/xdg v0.5.3
+## explicit; go 1.19
+github.com/adrg/xdg
+github.com/adrg/xdg/internal/pathutil
+github.com/adrg/xdg/internal/userdirs
+# github.com/andybalholm/brotli v1.2.4
+## explicit; go 1.22
+github.com/andybalholm/brotli
+github.com/andybalholm/brotli/matchfinder
+# github.com/andybalholm/cascadia v1.3.5
+## explicit; go 1.25.0
+github.com/andybalholm/cascadia
 # github.com/dustin/go-humanize v1.0.1
 ## explicit; go 1.16
 github.com/dustin/go-humanize
+# github.com/ffuf/ffuf/v2 v2.0.0-00010101000000-000000000000 => ./third_party/ffuf
+## explicit; go 1.26.0
+github.com/ffuf/ffuf/v2/pkg/assembly
+github.com/ffuf/ffuf/v2/pkg/engine
+github.com/ffuf/ffuf/v2/pkg/ffuf
+github.com/ffuf/ffuf/v2/pkg/filter
+github.com/ffuf/ffuf/v2/pkg/input
+github.com/ffuf/ffuf/v2/pkg/output
+github.com/ffuf/ffuf/v2/pkg/runner
+github.com/ffuf/ffuf/v2/pkg/scraper
+# github.com/ffuf/pencode v0.0.0-20240120104927-07e33ef17d5a
+## explicit; go 1.14
+github.com/ffuf/pencode/pkg/pencode
 # github.com/go-sql-driver/mysql v1.10.0
 ## explicit; go 1.24.0
 github.com/go-sql-driver/mysql
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
+# github.com/ishidawataru/sctp v0.0.0-20251114114122-19ddcbc6aae2
+## explicit; go 1.12
+github.com/ishidawataru/sctp
 # github.com/mattn/go-isatty v0.0.24
 ## explicit; go 1.20
 github.com/mattn/go-isatty
 # github.com/ncruces/go-strftime v1.0.0
 ## explicit; go 1.17
 github.com/ncruces/go-strftime
+# github.com/pelletier/go-toml v1.9.5
+## explicit; go 1.12
+github.com/pelletier/go-toml
+# github.com/praetorian-inc/nerva v1.70.3
+## explicit; go 1.27.0
+github.com/praetorian-inc/nerva/pkg/plugins
+github.com/praetorian-inc/nerva/pkg/plugins/fingerprinters
+github.com/praetorian-inc/nerva/pkg/plugins/pluginutils
+github.com/praetorian-inc/nerva/pkg/plugins/services/activemq
+github.com/praetorian-inc/nerva/pkg/plugins/services/ajp
+github.com/praetorian-inc/nerva/pkg/plugins/services/amqp
+github.com/praetorian-inc/nerva/pkg/plugins/services/anydesk
+github.com/praetorian-inc/nerva/pkg/plugins/services/atg
+github.com/praetorian-inc/nerva/pkg/plugins/services/bacnet
+github.com/praetorian-inc/nerva/pkg/plugins/services/bgp
+github.com/praetorian-inc/nerva/pkg/plugins/services/cassandra
+github.com/praetorian-inc/nerva/pkg/plugins/services/citrixica
+github.com/praetorian-inc/nerva/pkg/plugins/services/clickhouse
+github.com/praetorian-inc/nerva/pkg/plugins/services/coap
+github.com/praetorian-inc/nerva/pkg/plugins/services/crimsonv3
+github.com/praetorian-inc/nerva/pkg/plugins/services/cups
+github.com/praetorian-inc/nerva/pkg/plugins/services/db2
+github.com/praetorian-inc/nerva/pkg/plugins/services/dhcp
+github.com/praetorian-inc/nerva/pkg/plugins/services/diameter
+github.com/praetorian-inc/nerva/pkg/plugins/services/diametersctp
+github.com/praetorian-inc/nerva/pkg/plugins/services/dns
+github.com/praetorian-inc/nerva/pkg/plugins/services/docker
+github.com/praetorian-inc/nerva/pkg/plugins/services/echo
+github.com/praetorian-inc/nerva/pkg/plugins/services/ethercat
+github.com/praetorian-inc/nerva/pkg/plugins/services/ethernetip
+github.com/praetorian-inc/nerva/pkg/plugins/services/firebird
+github.com/praetorian-inc/nerva/pkg/plugins/services/fox
+github.com/praetorian-inc/nerva/pkg/plugins/services/ftp
+github.com/praetorian-inc/nerva/pkg/plugins/services/gesrtp
+github.com/praetorian-inc/nerva/pkg/plugins/services/git
+github.com/praetorian-inc/nerva/pkg/plugins/services/glassfish
+github.com/praetorian-inc/nerva/pkg/plugins/services/grpc
+github.com/praetorian-inc/nerva/pkg/plugins/services/gtpc
+github.com/praetorian-inc/nerva/pkg/plugins/services/gtpprime
+github.com/praetorian-inc/nerva/pkg/plugins/services/gtpu
+github.com/praetorian-inc/nerva/pkg/plugins/services/h323
+github.com/praetorian-inc/nerva/pkg/plugins/services/hartip
+github.com/praetorian-inc/nerva/pkg/plugins/services/http
+github.com/praetorian-inc/nerva/pkg/plugins/services/iax2
+github.com/praetorian-inc/nerva/pkg/plugins/services/iec104
+github.com/praetorian-inc/nerva/pkg/plugins/services/ikev2
+github.com/praetorian-inc/nerva/pkg/plugins/services/imap
+github.com/praetorian-inc/nerva/pkg/plugins/services/influxdb
+github.com/praetorian-inc/nerva/pkg/plugins/services/ipmi
+github.com/praetorian-inc/nerva/pkg/plugins/services/ipp
+github.com/praetorian-inc/nerva/pkg/plugins/services/ipsec
+github.com/praetorian-inc/nerva/pkg/plugins/services/irc
+github.com/praetorian-inc/nerva/pkg/plugins/services/iua
+github.com/praetorian-inc/nerva/pkg/plugins/services/javarmi
+github.com/praetorian-inc/nerva/pkg/plugins/services/jdwp
+github.com/praetorian-inc/nerva/pkg/plugins/services/jetdirect
+github.com/praetorian-inc/nerva/pkg/plugins/services/kafka/kafkaNew
+github.com/praetorian-inc/nerva/pkg/plugins/services/kafka/kafkaOld
+github.com/praetorian-inc/nerva/pkg/plugins/services/kerberos
+github.com/praetorian-inc/nerva/pkg/plugins/services/knxip
+github.com/praetorian-inc/nerva/pkg/plugins/services/l2tp
+github.com/praetorian-inc/nerva/pkg/plugins/services/ldap
+github.com/praetorian-inc/nerva/pkg/plugins/services/librechat
+github.com/praetorian-inc/nerva/pkg/plugins/services/linuxrpc
+github.com/praetorian-inc/nerva/pkg/plugins/services/lwm2m
+github.com/praetorian-inc/nerva/pkg/plugins/services/m2pa
+github.com/praetorian-inc/nerva/pkg/plugins/services/m2ua
+github.com/praetorian-inc/nerva/pkg/plugins/services/m3ua
+github.com/praetorian-inc/nerva/pkg/plugins/services/managesieve
+github.com/praetorian-inc/nerva/pkg/plugins/services/megaco
+github.com/praetorian-inc/nerva/pkg/plugins/services/melsecq
+github.com/praetorian-inc/nerva/pkg/plugins/services/memcached
+github.com/praetorian-inc/nerva/pkg/plugins/services/mgcp
+github.com/praetorian-inc/nerva/pkg/plugins/services/mikrotikwinbox
+github.com/praetorian-inc/nerva/pkg/plugins/services/milvus
+github.com/praetorian-inc/nerva/pkg/plugins/services/modbus
+github.com/praetorian-inc/nerva/pkg/plugins/services/mongodb
+github.com/praetorian-inc/nerva/pkg/plugins/services/mqtt/mqtt3
+github.com/praetorian-inc/nerva/pkg/plugins/services/mqtt/mqtt5
+github.com/praetorian-inc/nerva/pkg/plugins/services/msrpc
+github.com/praetorian-inc/nerva/pkg/plugins/services/mssql
+github.com/praetorian-inc/nerva/pkg/plugins/services/mysql
+github.com/praetorian-inc/nerva/pkg/plugins/services/mysqlx
+github.com/praetorian-inc/nerva/pkg/plugins/services/nats
+github.com/praetorian-inc/nerva/pkg/plugins/services/neo4j
+github.com/praetorian-inc/nerva/pkg/plugins/services/netbios
+github.com/praetorian-inc/nerva/pkg/plugins/services/nfs
+github.com/praetorian-inc/nerva/pkg/plugins/services/nrpe
+github.com/praetorian-inc/nerva/pkg/plugins/services/ntp
+github.com/praetorian-inc/nerva/pkg/plugins/services/omronfins
+github.com/praetorian-inc/nerva/pkg/plugins/services/opcua
+github.com/praetorian-inc/nerva/pkg/plugins/services/openvpn
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracleagile
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracledb
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracledirectory
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracleebs
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracleem
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracleformsreports
+github.com/praetorian-inc/nerva/pkg/plugins/services/oraclegoldengate
+github.com/praetorian-inc/nerva/pkg/plugins/services/oraclehttp
+github.com/praetorian-inc/nerva/pkg/plugins/services/oraclehyperion
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracleidentity
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracleinfra
+github.com/praetorian-inc/nerva/pkg/plugins/services/oraclejdesiebel
+github.com/praetorian-inc/nerva/pkg/plugins/services/oraclemft
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracleobiee
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracleords
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracleouaf
+github.com/praetorian-inc/nerva/pkg/plugins/services/oracleprotocoldb
+github.com/praetorian-inc/nerva/pkg/plugins/services/oraclesbc
+github.com/praetorian-inc/nerva/pkg/plugins/services/oraclesoa
+github.com/praetorian-inc/nerva/pkg/plugins/services/oraclespatialstudio
+github.com/praetorian-inc/nerva/pkg/plugins/services/pcworx
+github.com/praetorian-inc/nerva/pkg/plugins/services/peoplesoft
+github.com/praetorian-inc/nerva/pkg/plugins/services/pfcp
+github.com/praetorian-inc/nerva/pkg/plugins/services/pop3
+github.com/praetorian-inc/nerva/pkg/plugins/services/postgresql
+github.com/praetorian-inc/nerva/pkg/plugins/services/pptp
+github.com/praetorian-inc/nerva/pkg/plugins/services/proconos
+github.com/praetorian-inc/nerva/pkg/plugins/services/profinet
+github.com/praetorian-inc/nerva/pkg/plugins/services/pulsar
+github.com/praetorian-inc/nerva/pkg/plugins/services/qdrant
+github.com/praetorian-inc/nerva/pkg/plugins/services/quic
+github.com/praetorian-inc/nerva/pkg/plugins/services/rdp
+github.com/praetorian-inc/nerva/pkg/plugins/services/rdpeudp
+github.com/praetorian-inc/nerva/pkg/plugins/services/redis
+github.com/praetorian-inc/nerva/pkg/plugins/services/redissentinel
+github.com/praetorian-inc/nerva/pkg/plugins/services/rsync
+github.com/praetorian-inc/nerva/pkg/plugins/services/rtmp
+github.com/praetorian-inc/nerva/pkg/plugins/services/rtsp
+github.com/praetorian-inc/nerva/pkg/plugins/services/s7comm
+github.com/praetorian-inc/nerva/pkg/plugins/services/sccp
+github.com/praetorian-inc/nerva/pkg/plugins/services/sgsap
+github.com/praetorian-inc/nerva/pkg/plugins/services/sip
+github.com/praetorian-inc/nerva/pkg/plugins/services/smartinstall
+github.com/praetorian-inc/nerva/pkg/plugins/services/smb
+github.com/praetorian-inc/nerva/pkg/plugins/services/smbudp
+github.com/praetorian-inc/nerva/pkg/plugins/services/smpp
+github.com/praetorian-inc/nerva/pkg/plugins/services/smtp
+github.com/praetorian-inc/nerva/pkg/plugins/services/snmp
+github.com/praetorian-inc/nerva/pkg/plugins/services/snpp
+github.com/praetorian-inc/nerva/pkg/plugins/services/socks4
+github.com/praetorian-inc/nerva/pkg/plugins/services/socks5
+github.com/praetorian-inc/nerva/pkg/plugins/services/sonarqube
+github.com/praetorian-inc/nerva/pkg/plugins/services/ssh
+github.com/praetorian-inc/nerva/pkg/plugins/services/stun
+github.com/praetorian-inc/nerva/pkg/plugins/services/sua
+github.com/praetorian-inc/nerva/pkg/plugins/services/svn
+github.com/praetorian-inc/nerva/pkg/plugins/services/sybase
+github.com/praetorian-inc/nerva/pkg/plugins/services/teamviewer
+github.com/praetorian-inc/nerva/pkg/plugins/services/telnet
+github.com/praetorian-inc/nerva/pkg/plugins/services/tftp
+github.com/praetorian-inc/nerva/pkg/plugins/services/turn
+github.com/praetorian-inc/nerva/pkg/plugins/services/unitronics
+github.com/praetorian-inc/nerva/pkg/plugins/services/vmware
+github.com/praetorian-inc/nerva/pkg/plugins/services/vnc
+github.com/praetorian-inc/nerva/pkg/plugins/services/webcenter
+github.com/praetorian-inc/nerva/pkg/plugins/services/weblogic
+github.com/praetorian-inc/nerva/pkg/plugins/services/wireguard
+github.com/praetorian-inc/nerva/pkg/plugins/services/x11
+github.com/praetorian-inc/nerva/pkg/plugins/services/x2ap
+github.com/praetorian-inc/nerva/pkg/plugins/services/xmpp
+github.com/praetorian-inc/nerva/pkg/plugins/services/zabbix
+github.com/praetorian-inc/nerva/pkg/plugins/services/zookeeper
+github.com/praetorian-inc/nerva/pkg/scan
+github.com/praetorian-inc/nerva/third_party/cryptolib/ssh
+github.com/praetorian-inc/nerva/third_party/cryptolib/ssh/internal/bcrypt_pbkdf
+# github.com/projectdiscovery/wappalyzergo v0.3.4
+## explicit; go 1.25.0
+github.com/projectdiscovery/wappalyzergo
+# github.com/quic-go/quic-go v0.60.0
+## explicit; go 1.25.0
+github.com/quic-go/quic-go
+github.com/quic-go/quic-go/internal/ackhandler
+github.com/quic-go/quic-go/internal/congestion
+github.com/quic-go/quic-go/internal/flowcontrol
+github.com/quic-go/quic-go/internal/handshake
+github.com/quic-go/quic-go/internal/monotime
+github.com/quic-go/quic-go/internal/protocol
+github.com/quic-go/quic-go/internal/qerr
+github.com/quic-go/quic-go/internal/utils
+github.com/quic-go/quic-go/internal/utils/linkedlist
+github.com/quic-go/quic-go/internal/utils/ringbuffer
+github.com/quic-go/quic-go/internal/wire
+github.com/quic-go/quic-go/qlog
+github.com/quic-go/quic-go/qlogwriter
+github.com/quic-go/quic-go/qlogwriter/jsontext
+github.com/quic-go/quic-go/quicvarint
 # github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec
 ## explicit; go 1.12
 github.com/remyoudompheng/bigfft
+# github.com/twmb/murmur3 v1.1.8
+## explicit; go 1.11
+github.com/twmb/murmur3
 # github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
 ## explicit; go 1.13
 github.com/webview/webview_go
@@ -27,39 +249,160 @@ github.com/webview/webview_go/libs/mswebview2
 github.com/webview/webview_go/libs/mswebview2/include
 github.com/webview/webview_go/libs/webview
 github.com/webview/webview_go/libs/webview/include
-# golang.org/x/crypto v0.55.0
-## explicit; go 1.25.0
+# golang.org/x/crypto v0.57.0
+## explicit; go 1.26.0
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/chacha20
+golang.org/x/crypto/chacha20poly1305
 golang.org/x/crypto/cryptobyte
 golang.org/x/crypto/cryptobyte/asn1
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/internal/alias
 golang.org/x/crypto/internal/poly1305
+golang.org/x/crypto/poly1305
 golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
-# golang.org/x/net v0.57.0
-## explicit; go 1.25.0
+# golang.org/x/net v0.59.0
+## explicit; go 1.26.0
 golang.org/x/net/bpf
+golang.org/x/net/html
+golang.org/x/net/html/atom
+golang.org/x/net/http/httpguts
+golang.org/x/net/http2
+golang.org/x/net/http2/hpack
 golang.org/x/net/icmp
+golang.org/x/net/idna
+golang.org/x/net/internal/httpcommon
+golang.org/x/net/internal/httpsfv
 golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
 golang.org/x/net/internal/socks
+golang.org/x/net/internal/timeseries
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sync v0.21.0
-## explicit; go 1.25.0
+golang.org/x/net/trace
+# golang.org/x/sync v0.23.0
+## explicit; go 1.26.0
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.47.0
-## explicit; go 1.25.0
+# golang.org/x/sys v0.48.0
+## explicit; go 1.26.0
 golang.org/x/sys/cpu
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/term v0.45.0
-## explicit; go 1.25.0
+# golang.org/x/term v0.46.0
+## explicit; go 1.26.0
 golang.org/x/term
+# golang.org/x/text v0.42.0
+## explicit; go 1.26.0
+golang.org/x/text/secure/bidirule
+golang.org/x/text/transform
+golang.org/x/text/unicode/bidi
+golang.org/x/text/unicode/norm
+# golang.org/x/time v0.14.0
+## explicit; go 1.24.0
+golang.org/x/time/rate
+# google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda
+## explicit; go 1.24.0
+google.golang.org/genproto/googleapis/rpc/status
+# google.golang.org/grpc v1.78.0
+## explicit; go 1.24.0
+google.golang.org/grpc
+google.golang.org/grpc/attributes
+google.golang.org/grpc/backoff
+google.golang.org/grpc/balancer
+google.golang.org/grpc/balancer/base
+google.golang.org/grpc/balancer/endpointsharding
+google.golang.org/grpc/balancer/grpclb/state
+google.golang.org/grpc/balancer/pickfirst
+google.golang.org/grpc/balancer/pickfirst/internal
+google.golang.org/grpc/balancer/roundrobin
+google.golang.org/grpc/binarylog/grpc_binarylog_v1
+google.golang.org/grpc/channelz
+google.golang.org/grpc/codes
+google.golang.org/grpc/connectivity
+google.golang.org/grpc/credentials
+google.golang.org/grpc/credentials/insecure
+google.golang.org/grpc/encoding
+google.golang.org/grpc/encoding/internal
+google.golang.org/grpc/encoding/proto
+google.golang.org/grpc/experimental/stats
+google.golang.org/grpc/grpclog
+google.golang.org/grpc/grpclog/internal
+google.golang.org/grpc/internal
+google.golang.org/grpc/internal/backoff
+google.golang.org/grpc/internal/balancer/gracefulswitch
+google.golang.org/grpc/internal/balancerload
+google.golang.org/grpc/internal/binarylog
+google.golang.org/grpc/internal/buffer
+google.golang.org/grpc/internal/channelz
+google.golang.org/grpc/internal/credentials
+google.golang.org/grpc/internal/envconfig
+google.golang.org/grpc/internal/grpclog
+google.golang.org/grpc/internal/grpcsync
+google.golang.org/grpc/internal/grpcutil
+google.golang.org/grpc/internal/idle
+google.golang.org/grpc/internal/metadata
+google.golang.org/grpc/internal/pretty
+google.golang.org/grpc/internal/proxyattributes
+google.golang.org/grpc/internal/resolver
+google.golang.org/grpc/internal/resolver/delegatingresolver
+google.golang.org/grpc/internal/resolver/dns
+google.golang.org/grpc/internal/resolver/dns/internal
+google.golang.org/grpc/internal/resolver/passthrough
+google.golang.org/grpc/internal/resolver/unix
+google.golang.org/grpc/internal/serviceconfig
+google.golang.org/grpc/internal/stats
+google.golang.org/grpc/internal/status
+google.golang.org/grpc/internal/syscall
+google.golang.org/grpc/internal/transport
+google.golang.org/grpc/internal/transport/networktype
+google.golang.org/grpc/keepalive
+google.golang.org/grpc/mem
+google.golang.org/grpc/metadata
+google.golang.org/grpc/peer
+google.golang.org/grpc/resolver
+google.golang.org/grpc/resolver/dns
+google.golang.org/grpc/serviceconfig
+google.golang.org/grpc/stats
+google.golang.org/grpc/status
+google.golang.org/grpc/tap
+# google.golang.org/protobuf v1.36.10
+## explicit; go 1.23
+google.golang.org/protobuf/encoding/protojson
+google.golang.org/protobuf/encoding/prototext
+google.golang.org/protobuf/encoding/protowire
+google.golang.org/protobuf/internal/descfmt
+google.golang.org/protobuf/internal/descopts
+google.golang.org/protobuf/internal/detrand
+google.golang.org/protobuf/internal/editiondefaults
+google.golang.org/protobuf/internal/encoding/defval
+google.golang.org/protobuf/internal/encoding/json
+google.golang.org/protobuf/internal/encoding/messageset
+google.golang.org/protobuf/internal/encoding/tag
+google.golang.org/protobuf/internal/encoding/text
+google.golang.org/protobuf/internal/errors
+google.golang.org/protobuf/internal/filedesc
+google.golang.org/protobuf/internal/filetype
+google.golang.org/protobuf/internal/flags
+google.golang.org/protobuf/internal/genid
+google.golang.org/protobuf/internal/impl
+google.golang.org/protobuf/internal/order
+google.golang.org/protobuf/internal/pragma
+google.golang.org/protobuf/internal/protolazy
+google.golang.org/protobuf/internal/set
+google.golang.org/protobuf/internal/strs
+google.golang.org/protobuf/internal/version
+google.golang.org/protobuf/proto
+google.golang.org/protobuf/protoadapt
+google.golang.org/protobuf/reflect/protoreflect
+google.golang.org/protobuf/reflect/protoregistry
+google.golang.org/protobuf/runtime/protoiface
+google.golang.org/protobuf/runtime/protoimpl
+google.golang.org/protobuf/types/known/anypb
+google.golang.org/protobuf/types/known/durationpb
+google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
@@ -102,3 +445,4 @@ modernc.org/memory
 modernc.org/sqlite
 modernc.org/sqlite/lib
 modernc.org/sqlite/vtab
+# github.com/ffuf/ffuf/v2 => ./third_party/ffuf

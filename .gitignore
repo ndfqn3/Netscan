@@ -26,3 +26,7 @@ internal/scanner/plugins/.state.json
 # ç³»ç»Ÿæ–‡ä»¶
 .DS_Store
 Thumbs.db
+
+# Python »º´æ
+__pycache__/
+*.pyc

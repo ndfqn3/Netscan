@@ -1,0 +1,650 @@
+// Copyright 2022 Praetorian Security, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package http
+
+import (
+	"bytes"
+	"context"
+	"crypto/tls"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"regexp"
+	"strings"
+	"syscall"
+	"time"
+
+	wappalyzer "github.com/projectdiscovery/wappalyzergo"
+
+	"github.com/praetorian-inc/nerva/pkg/plugins"
+	"github.com/praetorian-inc/nerva/pkg/plugins/fingerprinters"
+	utils "github.com/praetorian-inc/nerva/pkg/plugins/pluginutils"
+)
+
+type HTTPPlugin struct {
+	analyzer *wappalyzer.Wappalyze
+}
+type HTTPSPlugin struct {
+	analyzer *wappalyzer.Wappalyze
+}
+
+const HTTP = "http"
+const HTTPS = "https"
+const USERAGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
+const maxTitleLength = 512
+
+func init() {
+	wappalyzerClient, err := wappalyzer.New()
+	if err != nil {
+		panic("unable to initialize wappalyzer library")
+	}
+	plugins.RegisterPlugin(&HTTPPlugin{analyzer: wappalyzerClient})
+	plugins.RegisterPlugin(&HTTPSPlugin{analyzer: wappalyzerClient})
+}
+
+var (
+	commonHTTPPorts = map[int]struct{}{
+		80:   {},
+		3000: {},
+		4567: {},
+		5000: {},
+		5985: {}, // WinRM HTTP
+		7001: {}, // Samsung MagicINFO 9 Server (also Oracle WebLogic — disambiguated in fingerprinter)
+		8000: {},
+		8001: {},
+		8080: {},
+		8081: {},
+		8082: {}, // JFrog Platform Router
+		8123: {}, // ClickHouse HTTP interface
+		8200: {}, // HashiCorp Vault
+		8888: {},
+		9001: {},
+		9080: {},
+		9090: {},
+		9100: {},
+		9191: {}, // PaperCut MF/NG admin web interface
+	}
+
+	commonHTTPSPorts = map[int]struct{}{
+		443:  {},
+		4443: {}, // NAKIVO Backup & Replication web UI
+		5986: {}, // WinRM HTTPS
+		6443: {}, // Kubernetes API server default port
+		8443: {},
+		9192: {}, // PaperCut MF/NG secure admin web interface
+		9398: {}, // Veeam Backup Enterprise Manager legacy REST API
+		9443: {}, // Veeam Backup Enterprise Manager web UI (among others)
+	}
+
+	// serverVersionRe matches a Server header value that contains a product/version token
+	// following the RFC 7231 format (e.g. "nginx/1.14.0", "Apache/2.4.29 (Ubuntu)").
+	// The leading name component avoids false positives from bare version-like numbers
+	// such as HTTP version fragments ("1.1 proxy").
+	serverVersionRe = regexp.MustCompile(`[A-Za-z][\w.-]*/\d+\.\d+`)
+)
+
+func (p *HTTPPlugin) PortPriority(port uint16) bool {
+	_, ok := commonHTTPPorts[int(port)]
+	return ok
+}
+
+func (p *HTTPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Target) (*plugins.Service, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("http://%s", conn.RemoteAddr().String()), nil)
+	if err != nil {
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			return nil, nil
+		}
+		return nil, &utils.RequestError{Message: err.Error()}
+	}
+
+	if target.Host != "" {
+		req.Host = target.Host
+	}
+
+	// http client with custom dialier to use the provided net.Conn
+	client := http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return conn, nil
+			},
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	req.Header.Set("User-Agent", USERAGENT)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, &utils.RequestError{Message: err.Error()}
+	}
+	defer resp.Body.Close()
+
+	baseURL := fmt.Sprintf("http://%s", conn.RemoteAddr().String())
+	technologies, cpes, fingerprintMetadata, fingerprintedTechs, fpFindings, title, body, _ := p.FingerprintResponse(resp, &client, baseURL, target.Host, target.Misconfigs)
+
+	payload := plugins.ServiceHTTP{
+		Status:          resp.Status,
+		StatusCode:      resp.StatusCode,
+		ResponseHeaders: resp.Header,
+	}
+	if title != "" {
+		if len(title) > maxTitleLength {
+			title = title[:maxTitleLength]
+		}
+		payload.Title = title
+	}
+	if len(technologies) > 0 {
+		payload.Technologies = technologies
+	}
+	if len(cpes) > 0 {
+		payload.CPEs = cpes
+	}
+	if len(fingerprintMetadata) > 0 {
+		payload.FingerprintMetadata = fingerprintMetadata
+	}
+
+	service := plugins.CreateServiceFrom(target, payload, false, resp.Header.Get("Server"), plugins.TCP)
+	if target.Misconfigs && len(fingerprintedTechs) > 0 {
+		service.AnonymousAccess = true
+		for _, ft := range fingerprintedTechs {
+			if len(ft.customFindings) > 0 {
+				service.SecurityFindings = append(service.SecurityFindings, ft.customFindings...)
+			} else {
+				service.SecurityFindings = append(service.SecurityFindings, plugins.SecurityFinding{
+					ID:          ft.name + "-anon-access",
+					Severity:    ft.severity,
+					Description: ft.name + " accessible without authentication",
+					Evidence:    "Successfully queried endpoint without credentials",
+				})
+			}
+		}
+	}
+	if target.Misconfigs && len(fpFindings) > 0 {
+		service.AnonymousAccess = true
+		service.SecurityFindings = append(service.SecurityFindings, fpFindings...)
+	}
+	if target.Misconfigs && resp.StatusCode/100 != 3 {
+		service.SecurityFindings = append(service.SecurityFindings, checkMissingSecurityHeaders(resp.Header, false)...)
+		if finding := checkCORSWildcard(resp.Header); finding != nil {
+			service.SecurityFindings = append(service.SecurityFindings, *finding)
+		}
+		if finding := checkServerVersion(resp.Header); finding != nil {
+			service.SecurityFindings = append(service.SecurityFindings, *finding)
+		}
+		if finding := checkDirectoryListing(body); finding != nil {
+			service.SecurityFindings = append(service.SecurityFindings, *finding)
+		}
+	}
+	if target.Deep {
+		deepClient := &http.Client{
+			Timeout: timeout,
+			Transport: &http.Transport{
+				DisableKeepAlives: true,
+			},
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		service.SecurityFindings = append(service.SecurityFindings, fingerprinters.RunDeepProbes(deepClient, baseURL, target.Host)...)
+	}
+	return service, nil
+}
+
+func (p *HTTPSPlugin) PortPriority(port uint16) bool {
+	_, ok := commonHTTPSPorts[int(port)]
+	return ok
+}
+
+func (p *HTTPSPlugin) Run(
+	conn net.Conn,
+	timeout time.Duration,
+	target plugins.Target,
+) (*plugins.Service, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://%s", conn.RemoteAddr().String()), nil)
+	if err != nil {
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			return nil, nil
+		}
+		return nil, &utils.RequestError{Message: err.Error()}
+	}
+
+	if target.Host != "" {
+		req.Host = target.Host
+	}
+
+	// https client with custom dialer to use the provided net.Conn
+	client := http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return conn, nil
+			},
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	req.Header.Set("User-Agent", USERAGENT)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, &utils.RequestError{Message: err.Error()}
+	}
+	defer resp.Body.Close()
+
+	baseURL := fmt.Sprintf("https://%s", conn.RemoteAddr().String())
+	technologies, cpes, fingerprintMetadata, fingerprintedTechs, fpFindings, title, body, _ := p.FingerprintResponse(resp, &client, baseURL, target.Host, target.Misconfigs)
+
+	payload := plugins.ServiceHTTPS{
+		Status:          resp.Status,
+		StatusCode:      resp.StatusCode,
+		ResponseHeaders: resp.Header,
+	}
+	if title != "" {
+		if len(title) > maxTitleLength {
+			title = title[:maxTitleLength]
+		}
+		payload.Title = title
+	}
+	if len(technologies) > 0 {
+		payload.Technologies = technologies
+	}
+	if len(cpes) > 0 {
+		payload.CPEs = cpes
+	}
+	if len(fingerprintMetadata) > 0 {
+		payload.FingerprintMetadata = fingerprintMetadata
+	}
+
+	service := plugins.CreateServiceFrom(target, payload, true, resp.Header.Get("Server"), plugins.TCP)
+	if target.Misconfigs && len(fingerprintedTechs) > 0 {
+		service.AnonymousAccess = true
+		for _, ft := range fingerprintedTechs {
+			if len(ft.customFindings) > 0 {
+				service.SecurityFindings = append(service.SecurityFindings, ft.customFindings...)
+			} else {
+				service.SecurityFindings = append(service.SecurityFindings, plugins.SecurityFinding{
+					ID:          ft.name + "-anon-access",
+					Severity:    ft.severity,
+					Description: ft.name + " accessible without authentication",
+					Evidence:    "Successfully queried endpoint without credentials",
+				})
+			}
+		}
+	}
+	if target.Misconfigs && len(fpFindings) > 0 {
+		service.AnonymousAccess = true
+		service.SecurityFindings = append(service.SecurityFindings, fpFindings...)
+	}
+	if target.Misconfigs {
+		service.SecurityFindings = append(service.SecurityFindings, plugins.CheckTLS(conn)...)
+		if resp.StatusCode/100 != 3 {
+			service.SecurityFindings = append(service.SecurityFindings, checkMissingSecurityHeaders(resp.Header, true)...)
+			if finding := checkCORSWildcard(resp.Header); finding != nil {
+				service.SecurityFindings = append(service.SecurityFindings, *finding)
+			}
+			if finding := checkServerVersion(resp.Header); finding != nil {
+				service.SecurityFindings = append(service.SecurityFindings, *finding)
+			}
+			if finding := checkDirectoryListing(body); finding != nil {
+				service.SecurityFindings = append(service.SecurityFindings, *finding)
+			}
+		}
+	}
+	if target.Deep {
+		deepClient := &http.Client{
+			Timeout: timeout,
+			Transport: &http.Transport{
+				DisableKeepAlives: true,
+				TLSClientConfig:   &tls.Config{InsecureSkipVerify: true, ServerName: target.Host}, //#nosec G402 -- scanner must probe targets regardless of cert validity
+			},
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		service.SecurityFindings = append(service.SecurityFindings, fingerprinters.RunDeepProbes(deepClient, baseURL, target.Host)...)
+	}
+	return service, nil
+}
+
+func (p *HTTPPlugin) Type() plugins.Protocol {
+	return plugins.TCP
+}
+
+func (p *HTTPSPlugin) Type() plugins.Protocol {
+	return plugins.TCPTLS
+}
+
+func (p *HTTPPlugin) Priority() int {
+	return 0
+}
+
+func (p *HTTPSPlugin) Priority() int {
+	return 1
+}
+
+func (p *HTTPPlugin) Name() string {
+	return HTTP
+}
+func (p *HTTPSPlugin) Name() string {
+	return HTTPS
+}
+func (p *HTTPPlugin) FingerprintResponse(resp *http.Response, client *http.Client, baseURL string, host string, misconfigs bool) ([]string, []string, map[string]map[string]any, []fingerprintedTech, []plugins.SecurityFinding, string, []byte, error) {
+	return fingerprint(resp, p.analyzer, client, baseURL, host, misconfigs)
+}
+
+func (p *HTTPSPlugin) FingerprintResponse(resp *http.Response, client *http.Client, baseURL string, host string, misconfigs bool) ([]string, []string, map[string]map[string]any, []fingerprintedTech, []plugins.SecurityFinding, string, []byte, error) {
+	return fingerprint(resp, p.analyzer, client, baseURL, host, misconfigs)
+}
+
+// formatTechnologyWithVersion returns a technology string with version appended if present.
+// This matches wappalyzer's format: "tech:version" (e.g., "kubernetes:1.29.0").
+func formatTechnologyWithVersion(technology, version string) string {
+	if version == "" {
+		return technology
+	}
+	return technology + ":" + version
+}
+
+// fingerprintedTech pairs a formatted technology name with its severity and optional custom findings.
+type fingerprintedTech struct {
+	name           string
+	severity       plugins.Severity
+	customFindings []plugins.SecurityFinding
+}
+
+func checkMissingSecurityHeaders(headers http.Header, checkHSTS bool) []plugins.SecurityFinding {
+	findings := make([]plugins.SecurityFinding, 0, 3)
+
+	if checkHSTS && headers.Get("Strict-Transport-Security") == "" {
+		findings = append(findings, plugins.SecurityFinding{
+			ID:          "http-missing-hsts",
+			Severity:    plugins.SeverityLow,
+			Description: "HTTP response missing Strict-Transport-Security header",
+			Evidence:    "header not present: Strict-Transport-Security",
+		})
+	}
+	if headers.Get("Content-Security-Policy") == "" {
+		findings = append(findings, plugins.SecurityFinding{
+			ID:          "http-missing-csp",
+			Severity:    plugins.SeverityLow,
+			Description: "HTTP response missing Content-Security-Policy header",
+			Evidence:    "header not present: Content-Security-Policy",
+		})
+	}
+	if headers.Get("X-Frame-Options") == "" {
+		findings = append(findings, plugins.SecurityFinding{
+			ID:          "http-missing-x-frame-options",
+			Severity:    plugins.SeverityLow,
+			Description: "HTTP response missing X-Frame-Options header",
+			Evidence:    "header not present: X-Frame-Options",
+		})
+	}
+
+	return findings
+}
+
+// checkCORSWildcard returns a SecurityFinding when Access-Control-Allow-Origin is set to "*".
+// The credentials variant is Low since browsers reject the wildcard+credentials combination
+// per the Fetch spec; it signals a misconfiguration rather than an exploitable flaw.
+func checkCORSWildcard(headers http.Header) *plugins.SecurityFinding {
+	origin := headers.Get("Access-Control-Allow-Origin")
+	if origin != "*" {
+		return nil
+	}
+	if strings.EqualFold(headers.Get("Access-Control-Allow-Credentials"), "true") {
+		return &plugins.SecurityFinding{
+			ID:          "http-cors-wildcard-credentials",
+			Severity:    plugins.SeverityLow,
+			Description: "Server sends CORS wildcard with Access-Control-Allow-Credentials: true; browsers reject this combination per the Fetch spec, but it signals a server misconfiguration",
+			Evidence:    "Access-Control-Allow-Origin: * | Access-Control-Allow-Credentials: true",
+		}
+	}
+	return &plugins.SecurityFinding{
+		ID:          "http-cors-wildcard",
+		Severity:    plugins.SeverityMedium,
+		Description: "CORS wildcard origin allows any site to read cross-origin responses",
+		Evidence:    "Access-Control-Allow-Origin: *",
+	}
+}
+
+// checkServerVersion returns a SecurityFinding when the Server header contains a version number
+// matching MAJOR.MINOR format (e.g. "nginx/1.14.0", "Apache/2.4.29").
+// Generic server names without version numbers (e.g. "nginx", "cloudflare") are not flagged.
+func checkServerVersion(headers http.Header) *plugins.SecurityFinding {
+	server := headers.Get("Server")
+	if server == "" {
+		return nil
+	}
+	if len(server) > 256 {
+		server = server[:256]
+		for i := len(server) - 1; i >= 253 && server[i]&0xC0 == 0x80; i-- {
+			server = server[:i]
+		}
+	}
+	if !serverVersionRe.MatchString(server) {
+		return nil
+	}
+	return &plugins.SecurityFinding{
+		ID:          "http-server-version",
+		Severity:    plugins.SeverityInfo,
+		Description: "Server header discloses software version information",
+		Evidence:    "Server: " + server,
+	}
+}
+
+// checkDirectoryListing returns a SecurityFinding when the response body contains patterns
+// associated with automatically generated directory listings.
+func checkDirectoryListing(body []byte) *plugins.SecurityFinding {
+	if len(body) == 0 {
+		return nil
+	}
+	// Directory listing signatures appear near the document start; limit scope to avoid
+	// allocating a full copy of potentially large response bodies.
+	limit := len(body)
+	if limit > 8192 {
+		limit = 8192
+	}
+	lower := bytes.ToLower(body[:limit])
+	patterns := [][]byte{
+		[]byte("<title>index of /"),
+		[]byte("<h1>directory listing for /"),
+		[]byte("[to parent directory]"),
+	}
+	for _, p := range patterns {
+		if bytes.Contains(lower, p) {
+			return &plugins.SecurityFinding{
+				ID:          "http-directory-listing",
+				Severity:    plugins.SeverityLow,
+				Description: "Server returns an auto-generated directory listing",
+				Evidence:    string(p),
+			}
+		}
+	}
+	if bytes.Contains(lower, []byte(`<pre><a href="../">`)) {
+		return &plugins.SecurityFinding{
+			ID:          "http-directory-listing",
+			Severity:    plugins.SeverityLow,
+			Description: "Server returns an auto-generated directory listing",
+			Evidence:    `<pre><a href="../">`,
+		}
+	}
+	if bytes.Contains(lower, []byte(`<pre><a href='../'>`)) {
+		return &plugins.SecurityFinding{
+			ID:          "http-directory-listing",
+			Severity:    plugins.SeverityLow,
+			Description: "Server returns an auto-generated directory listing",
+			Evidence:    `<pre><a href='../'>`,
+		}
+	}
+	return nil
+}
+
+// processFingerprintResult extracts technology (with version), CPEs, metadata, and severity from a FingerprintResult.
+func processFingerprintResult(result *fingerprinters.FingerprintResult) (string, []string, map[string]any, plugins.Severity) {
+	if result == nil {
+		return "", nil, nil, ""
+	}
+	tech := formatTechnologyWithVersion(result.Technology, result.Version)
+	return tech, result.CPEs, result.Metadata, result.Severity
+}
+
+func fingerprint(resp *http.Response, analyzer *wappalyzer.Wappalyze, client *http.Client, baseURL string, host string, misconfigs bool) ([]string, []string, map[string]map[string]any, []fingerprintedTech, []plugins.SecurityFinding, string, []byte, error) {
+	var technologies, cpes []string
+	var fingerprintedTechs []fingerprintedTech
+	var fpFindings []plugins.SecurityFinding
+	// matchedFingerprinters tracks which fingerprinters produced results for MisconfigHTTPFingerprinter calls.
+	var matchedFingerprinters []fingerprinters.HTTPFingerprinter
+	fingerprintMetadata := make(map[string]map[string]any)
+	maxResponseSize := int64(10 * 1024 * 1024) // 10MB limit
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
+	if err != nil {
+		return nil, nil, nil, nil, nil, "", nil, err
+	}
+	// Close body to release connection for reuse by active fingerprinters.
+	// Without this, the transport may not return the connection to the idle pool,
+	// causing subsequent probe requests (e.g., /varz, /version) to fail.
+	resp.Body.Close()
+
+	// Wappalyzer fingerprinting (existing)
+	// FingerprintWithInfo returns map[string]AppInfo with CPE data needed for vulnerability correlation;
+	// FingerprintWithTitle returns map[string]struct{} + title string — no single method provides both.
+	fingerprintResult := analyzer.FingerprintWithInfo(resp.Header, data)
+	_, title := analyzer.FingerprintWithTitle(resp.Header, data)
+	for tech, appInfo := range fingerprintResult {
+		technologies = append(technologies, tech)
+		if cpe := appInfo.CPE; cpe != "" {
+			cpes = append(cpes, cpe)
+		}
+	}
+
+	// Passive fingerprinters (work on root response)
+	for _, fp := range fingerprinters.GetFingerprinters() {
+		// Skip active fingerprinters with dedicated endpoints (run in the active phase)
+		if active, ok := fp.(fingerprinters.ActiveHTTPFingerprinter); ok {
+			if endpoint := active.ProbeEndpoint(); endpoint != "" && endpoint != "/" {
+				continue
+			}
+		}
+		if !fp.Match(resp) {
+			continue
+		}
+		result, err := fp.Fingerprint(resp, data)
+		if err != nil || result == nil {
+			continue
+		}
+		tech, resultCPEs, metadata, severity := processFingerprintResult(result)
+		if result.Technology != "" { // Guard against empty technology
+			technologies = append(technologies, tech)
+			if result.Severity != "" || len(result.SecurityFindings) > 0 {
+				fingerprintedTechs = append(fingerprintedTechs, fingerprintedTech{
+					name:           tech,
+					severity:       severity,
+					customFindings: result.SecurityFindings,
+				})
+			}
+		}
+		cpes = append(cpes, resultCPEs...)
+		if metadata != nil {
+			key := result.Technology
+			if key == "" {
+				key = fp.Name()
+			}
+			fingerprintMetadata[key] = metadata
+		}
+		matchedFingerprinters = append(matchedFingerprinters, fp)
+	}
+
+	// Active fingerprinters (probe specific endpoints)
+	if client != nil && baseURL != "" {
+		for fpName, endpoint := range fingerprinters.GetProbeEndpoints() {
+			// Don't re-probe "/"
+			if endpoint == "" || endpoint == "/" {
+				continue
+			}
+
+			probeURL := baseURL + endpoint
+			probeReq, err := http.NewRequest("GET", probeURL, nil)
+			if err != nil {
+				continue
+			}
+			// Set Accept header - use fingerprinter's preference if available
+			acceptHeader := "application/json"
+			fp := fingerprinters.GetFingerprinterByName(fpName)
+			if provider, ok := fp.(fingerprinters.AcceptHeaderProvider); ok {
+				if probeAccept := provider.ProbeAccept(); probeAccept != "" {
+					acceptHeader = probeAccept
+				}
+			}
+			probeReq.Header.Set("Accept", acceptHeader)
+			probeReq.Header.Set("User-Agent", USERAGENT)
+			if host != "" {
+				probeReq.Host = host
+			}
+
+			probeResp, err := client.Do(probeReq)
+			if err != nil {
+				continue
+			}
+
+			probeBody, err := io.ReadAll(io.LimitReader(probeResp.Body, maxResponseSize))
+			_ = probeResp.Body.Close()
+			if err != nil {
+				continue
+			}
+
+			// Run the specific fingerprinter (looked up above for Accept header)
+			if fp != nil && fp.Match(probeResp) {
+				if result, err := fp.Fingerprint(probeResp, probeBody); err == nil && result != nil {
+					tech, resultCPEs, metadata, severity := processFingerprintResult(result)
+					if result.Technology != "" { // Guard against empty technology
+						technologies = append(technologies, tech)
+						if result.Severity != "" || len(result.SecurityFindings) > 0 {
+							fingerprintedTechs = append(fingerprintedTechs, fingerprintedTech{
+								name:           tech,
+								severity:       severity,
+								customFindings: result.SecurityFindings,
+							})
+						}
+					}
+					cpes = append(cpes, resultCPEs...)
+					if metadata != nil {
+						key := result.Technology
+						if key == "" {
+							key = fpName
+						}
+						fingerprintMetadata[key] = metadata
+					}
+					matchedFingerprinters = append(matchedFingerprinters, fp)
+				}
+			}
+		}
+	}
+
+	// MisconfigHTTPFingerprinter phase: call CheckMisconfigs on matched fingerprinters
+	if misconfigs && client != nil && baseURL != "" {
+		for _, fp := range matchedFingerprinters {
+			if mfp, ok := fp.(fingerprinters.MisconfigHTTPFingerprinter); ok {
+				fpFindings = append(fpFindings, mfp.CheckMisconfigs(client, baseURL, host)...)
+			}
+		}
+	}
+
+	return technologies, cpes, fingerprintMetadata, fingerprintedTechs, fpFindings, title, data, nil
+}

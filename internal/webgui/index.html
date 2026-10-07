@@ -71,6 +71,7 @@
   #tab-scan { grid-template-columns: 330px 1fr; }
   #tab-exploit { grid-template-columns: 1fr 1fr; align-items: start; overflow-y: auto; }
   #tab-assets { overflow-y: auto; }
+  #tab-fuzz, #tab-tools, #tab-plugins, #tab-web { overflow-y: auto; padding-right: 4px; }
   .left-col { display: flex; flex-direction: column; gap: 13px; min-width: 0; overflow-y: auto; padding-right: 4px; }
   .right-col { grid-column: 2; display: flex; flex-direction: column; gap: 13px; min-width: 0; min-height: 0; }
   @media (max-width: 900px) {
@@ -262,9 +263,12 @@
 
 <nav class="tabs">
   <button class="tab active" data-tab="scan">🔍 扫描</button>
+  <button class="tab" data-tab="web">🌐 Web 侦察</button>
+  <button class="tab" data-tab="fuzz">🎯 模糊测试</button>
   <button class="tab" data-tab="exploit">💥 漏洞利用</button>
   <button class="tab" data-tab="assets">🗂 资产历史</button>
   <button class="tab" data-tab="plugins">🧩 插件</button>
+<button class="tab" data-tab="tools">🧰 工具</button>
 </nav>
 
 <main id="tab-scan" class="tab-panel">
@@ -278,6 +282,10 @@
       <div class="field">
         <label>端口</label>
         <input id="ports" value="1-65535" placeholder="1-1000 / 80,443 / top-1000 / -">
+      </div>
+      <div class="field">
+        <label>目标数量上限(防误扫大网段)</label>
+        <input id="max-targets" type="number" value="10000">
       </div>
       <div class="field">
         <label>定时模板</label>
@@ -318,6 +326,9 @@
         <label class="chip"><input type="checkbox" id="fp"><span>CMS指纹</span></label>
         <label class="chip"><input type="checkbox" id="banner"><span>Banner抓取</span></label>
         <label class="chip"><input type="checkbox" id="stopafter"><span>命中即停</span></label>
+        <label class="chip"><input type="checkbox" id="rand"><span>随机端口顺序</span></label>
+        <label class="chip"><input type="checkbox" id="force-raw"><span>强制raw</span></label>
+        <label class="chip"><input type="checkbox" id="verbose"><span>详细输出</span></label>
       </div>
     </section>
 
@@ -371,23 +382,40 @@
       </div>
     </section>
 
-    <section class="card result-card">
-      <h2>Web 侦察</h2>
-      <div class="chips">
-        <label class="chip"><input type="checkbox" id="dir"><span>目录爆破</span></label>
-        <label class="chip"><input type="checkbox" id="webcheck"><span>Web头检查</span></label>
-        <label class="chip"><input type="checkbox" id="sub"><span>子域名爆破</span></label>
-        <label class="chip"><input type="checkbox" id="whois"><span>Whois</span></label>
-        <label class="chip"><input type="checkbox" id="dnsq"><span>DNS记录</span></label>
+    <!-- Web 侦察已迁移至独立标签页 tab-web -->
+  </div>
+</main>
+
+<main id="tab-web" class="tab-panel" style="display:none">
+  <section class="card">
+    <h2>Web 侦察目标</h2>
+    <div class="field">
+      <label>目标(域名/IP, 多个时取第一个)</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="web-target" placeholder="example.com 或 192.168.1.1" style="flex:1;min-width:240px">
+        <input id="web-port" placeholder="端口 (默认 80)" style="width:150px">
         <label class="chip"><input type="checkbox" id="https"><span>HTTPS</span></label>
       </div>
-      <div class="field" style="margin-top:10px">
-        <label>子域名爆破深度 (1-3)</label>
-        <input id="subdepth" type="number" value="1" min="1" max="3">
-      </div>
-      <div id="recon" class="recon-out" style="margin-top:6px">结果将显示在这里</div>
-    </section>
-  </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Web 侦察功能 <span style="color:var(--muted);font-size:12px">子域名爆破 · 目录爆破 · Web头检查 · Whois · DNS 记录</span></h2>
+    <div class="chips">
+      <label class="chip"><input type="checkbox" id="sub"><span>子域名爆破</span></label>
+      <label class="chip"><input type="checkbox" id="dir"><span>目录爆破</span></label>
+      <label class="chip"><input type="checkbox" id="webcheck"><span>Web头检查</span></label>
+      <label class="chip"><input type="checkbox" id="whois"><span>Whois</span></label>
+      <label class="chip"><input type="checkbox" id="dnsq"><span>DNS记录</span></label>
+    </div>
+    <div class="field" style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <label style="margin:0">子域名爆破深度 (1-3)</label>
+      <input id="subdepth" type="number" value="1" min="1" max="3" style="width:90px">
+      <button id="recon-start" class="primary">▶ 开始侦察</button>
+      <span style="color:var(--muted);font-size:12px">也可在「扫描」页勾选后随扫描一起执行</span>
+    </div>
+    <div id="recon" class="recon-out" style="margin-top:6px;max-height:520px">结果将显示在这里</div>
+  </section>
 </main>
 
 <main id="tab-exploit" class="tab-panel" style="display:none">
@@ -526,6 +554,13 @@
         <input id="poc-port" type="number" value="80" min="1">
       </div>
     </div>
+    <div class="field">
+      <label>定向过滤(--poc-id) / OAST 回调(--oast, 留空跳过回调模板)</label>
+      <div style="display:flex;gap:8px">
+        <input id="poc-filter" placeholder="CVE-2021-44228">
+        <input id="poc-oast" placeholder="本机IP:9999 (端口0随机)">
+      </div>
+    </div>
     <button id="poc-start" class="primary">▶ 扫描 Web POC(生成报告)</button>
   </section>
 
@@ -540,11 +575,20 @@
     </div>
     <button id="ssh-start" class="primary">▶ SSH 爆破并弹命令行</button>
     <p class="sub">爆破 SSH 弱口令 → 成功后自动弹出交互式命令行窗口</p>
+    <div class="field" style="margin-top:8px">
+      <label>SSH 直连(已知凭据, 弹交互式命令行)</label>
+      <div style="display:flex;gap:8px">
+        <input id="sshc-user" placeholder="用户名">
+        <input id="sshc-pass" type="password" placeholder="密码">
+        <button id="sshc-start">🔗 直连</button>
+      </div>
+    </div>
   </section>
 
   <section class="card">
     <h2>漏洞报告</h2>
     <button id="vuln-report" class="primary">▶ 生成漏洞报告(名称+复现步骤)</button>
+    <button id="exploit-list-btn">▶ 列出利用模块</button>
     <pre id="vuln-report-out" class="recon-out" style="margin-top:10px;max-height:300px;overflow-y:auto"></pre>
   </section>
 
@@ -566,6 +610,242 @@
       </div>
     </div>
     <pre id="history-output" class="recon-out"></pre>
+  </section>
+</main>
+
+<main id="tab-tools" class="tab-panel" style="display:none">
+  <section class="card">
+    <h2>结果导出(多格式)</h2>
+    <div class="field">
+      <label>格式 / 文件名(不含扩展名)</label>
+      <div style="display:flex;gap:8px">
+        <select id="exp-format">
+          <option value="html">HTML 报告</option>
+          <option value="json">JSON</option>
+          <option value="csv">CSV</option>
+          <option value="grep">Grepable</option>
+          <option value="xml">XML</option>
+          <option value="normal">Normal 文本</option>
+        </select>
+        <input id="exp-name" placeholder="netscan-export" style="flex:1">
+        <button id="exp-run" class="primary">💾 导出</button>
+      </div>
+    </div>
+    <pre id="exp-out" class="recon-out" style="max-height:120px"></pre>
+  </section>
+
+  <section class="card">
+    <h2>资产对比 / 定时监控</h2>
+    <div class="field">
+      <label>目标(状态文件命名)</label>
+      <div style="display:flex;gap:8px">
+        <input id="diff-target" placeholder="192.168.1.1" style="flex:1">
+        <button id="diff-run" class="primary">📊 与上次对比并保存</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>自动重扫间隔(秒, 使用扫描页目标/端口配置)</label>
+      <div style="display:flex;gap:8px">
+        <input id="mon-interval" type="number" value="300" min="10" style="max-width:140px">
+        <button id="mon-start">▶ 开始</button>
+        <button id="mon-stop">■ 停止</button>
+        <span id="mon-state" style="color:var(--muted);font-size:12px"></span>
+      </div>
+    </div>
+    <pre id="diff-out" class="recon-out" style="max-height:220px"></pre>
+  </section>
+
+  <section class="card">
+    <h2>插件市场地址</h2>
+    <div class="field">
+      <div style="display:flex;gap:8px">
+        <input id="market-url" placeholder="http://host:port" style="flex:1">
+        <button id="market-set" class="primary">设置</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="grid-column:1/-1">
+    <h2>资源管理(POC / 模块 / 字典 / Shell 链)</h2>
+    <div class="chips" style="margin-bottom:8px">
+      <button class="res-tab primary" data-res="poc">POC 模板</button>
+      <button class="res-tab" data-res="module">漏洞模块</button>
+      <button class="res-tab" data-res="dict">字典</button>
+      <button class="res-tab" data-res="shell">Shell 链</button>
+    </div>
+    <div class="field">
+      <div style="display:flex;gap:8px">
+        <input id="res-path" placeholder="要添加的 YAML/JSON 文件路径" style="flex:1">
+        <input id="res-id" placeholder="删除用 ID" style="max-width:160px">
+        <button id="res-add" class="primary">添加文件</button>
+        <button id="res-remove">删除 ID</button>
+      </div>
+    </div>
+    <pre id="res-out" class="recon-out" style="max-height:260px"></pre>
+  </section>
+</main>
+
+<main id="tab-fuzz" class="tab-panel" style="display:none">
+  <section class="card">
+    <h2>Web 模糊测试(ffuf) <span style="color:var(--muted);font-size:12px">目录/参数/子域名/虚拟主机 fuzz · 自动校准过滤软 404</span></h2>
+    <div class="field">
+      <label>模式</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="fuzz-mode">
+          <option value="url">目录/参数/变量 fuzz(URL 含 FUZZ)</option>
+          <option value="subdomain">子域名爆破(FUZZ.域名)</option>
+          <option value="vhost">虚拟主机爆破(Host: FUZZ.域名)</option>
+        </select>
+        <input id="fuzz-sub" placeholder="根域名, 如 example.com" style="width:210px">
+        <select id="fuzz-scheme"><option>http</option><option>https</option></select>
+        <input id="fuzz-port" type="number" placeholder="端口(可选)" style="width:110px">
+      </div>
+    </div>
+    <div class="field">
+      <label>目标 URL(必须含 FUZZ; 子域名/虚拟主机模式可留空或填目标 IP)</label>
+      <input id="fuzz-url" placeholder="http://target/FUZZ 或 http://target/api?x=FUZZ">
+    </div>
+    <div class="field">
+      <label>字典(每行一个: 文件 或 文件:关键字; 多行=多词表; 留空=内置目录字典)</label>
+      <textarea id="fuzz-wordlist" rows="3" placeholder="C:\dict\dir.txt&#10;C:\dict\users.txt:USER&#10;builtin:springboot_actuator (内置字典, 工具→字典查看全部)"></textarea>
+    </div>
+    <div class="field">
+      <label>请求配置</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="fuzz-method">
+          <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option>
+        </select>
+        <input id="fuzz-ext" placeholder="扩展名 .php,.bak" style="width:140px">
+        <input id="fuzz-threads" type="number" value="40" min="1" title="线程数" style="width:90px">
+        <input id="fuzz-rate" type="number" value="0" min="0" title="每秒请求上限(0=不限)" style="width:110px">
+        <input id="fuzz-delay" placeholder="间隔 0.1 / 0.1-2.0" title="请求间隔(秒)" style="width:140px">
+        <input id="fuzz-timeout" type="number" value="10" min="1" title="超时(秒)" style="width:90px">
+        <input id="fuzz-cookies" placeholder="Cookie: a=1" style="flex:1;min-width:160px">
+      </div>
+    </div>
+    <div class="field">
+      <label>POST 数据(可含 FUZZ)</label>
+      <textarea id="fuzz-data" rows="2" placeholder="user=FUZZ&pass=x"></textarea>
+    </div>
+    <div class="field">
+      <label>自定义请求头(每行一个: Name: Value)</label>
+      <textarea id="fuzz-headers" rows="2" placeholder="X-Forwarded-For: 127.0.0.1"></textarea>
+    </div>
+    <div class="field">
+      <label>匹配(留空用默认: 全部状态码)</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="fuzz-mc" placeholder="状态码 200,301" style="flex:1;min-width:120px">
+        <input id="fuzz-ms" placeholder="大小" style="flex:1;min-width:90px">
+        <input id="fuzz-mw" placeholder="词数" style="flex:1;min-width:80px">
+        <input id="fuzz-ml" placeholder="行数" style="flex:1;min-width:80px">
+        <input id="fuzz-mr" placeholder="正则" style="flex:1;min-width:120px">
+        <input id="fuzz-mt" placeholder="耗时 >100/<100ms" style="flex:1;min-width:110px">
+      </div>
+    </div>
+    <div class="field">
+      <label>过滤(推荐 -ac 或 状态码 404)</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="fuzz-fc" placeholder="状态码 404" style="flex:1;min-width:120px">
+        <input id="fuzz-fs" placeholder="大小" style="flex:1;min-width:90px">
+        <input id="fuzz-fw" placeholder="词数" style="flex:1;min-width:80px">
+        <input id="fuzz-fl" placeholder="行数" style="flex:1;min-width:80px">
+        <input id="fuzz-fr" placeholder="正则" style="flex:1;min-width:120px">
+        <input id="fuzz-ft" placeholder="耗时 >100/<100ms" style="flex:1;min-width:110px">
+      </div>
+    </div>
+    <div class="field">
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-ac" checked> 自动校准(-ac)</label>
+        <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-rec"> 递归目录</label>
+        <label style="display:flex;gap:4px;align-items:center">深度 <input id="fuzz-depth" type="number" value="2" min="1" style="width:70px"></label>
+        <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-follow"> 跟随重定向</label>
+        <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-raw"> 不编码 URI</label>
+        <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-ignore-body"> 不读响应体</label>
+        <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-http2"> HTTP/2</label>
+        <button id="fuzz-start" class="primary">▶ 开始模糊测试</button>
+        <button id="fuzz-stop">■ 停止</button>
+      </div>
+    </div>
+
+    <details style="margin-top:6px">
+      <summary style="cursor:pointer;color:var(--accent);font-weight:600;font-size:13px">高级选项(输入模式/原始请求/编码器/递归策略/组合模式/自动校准/停止条件/代理重放/Scraper/日志)</summary>
+      <div class="field" style="margin-top:10px">
+        <label>多字典输入模式</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="fuzz-input-mode"><option value="">clusterbomb(默认)</option><option>pitchfork</option><option>sniper</option></select>
+          <input id="fuzz-input-num" type="number" placeholder="input-num" style="width:120px">
+          <input id="fuzz-input-shell" placeholder="input-shell(如 /bin/bash)" style="width:190px">
+          <input id="fuzz-enc" placeholder="编码器 'FUZZ:urlencode b64encode'" style="flex:1;min-width:200px">
+          <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-ic"> 忽略注释</label>
+          <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-dsc"> DirSearch 兼容</label>
+        </div>
+        <textarea id="fuzz-input-cmd" rows="2" placeholder="命令输入(每行一个, 需 input-num; 覆盖字典)" style="margin-top:6px"></textarea>
+      </div>
+      <div class="field">
+        <label>原始 HTTP 请求文件(ffuf -request, 可替代 URL)</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="fuzz-request" placeholder="raw 请求文件路径" style="flex:1;min-width:220px">
+          <select id="fuzz-request-proto"><option value="">https(默认)</option><option>http</option></select>
+          <select id="fuzz-rec-strategy"><option value="">递归 default</option><option>greedy</option></select>
+          <select id="fuzz-mmode"><option value="">匹配器 or(默认)</option><option>and</option></select>
+          <select id="fuzz-fmode"><option value="">过滤器 or(默认)</option><option>and</option></select>
+        </div>
+      </div>
+      <div class="field">
+        <label>自动校准</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="fuzz-ac-keyword" placeholder="关键字(默认 FUZZ)" style="width:160px">
+          <input id="fuzz-ac-strategies" placeholder="策略 basic,advanced" style="width:190px">
+          <input id="fuzz-ac-strings" placeholder="自定义校准串(逗号分隔)" style="flex:1;min-width:200px">
+          <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-ac-perhost"> 按主机校准</label>
+        </div>
+      </div>
+      <div class="field">
+        <label>HTTP 高级 / 停止条件</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input id="fuzz-sni" placeholder="TLS SNI" style="width:150px">
+          <input id="fuzz-cc" placeholder="客户端证书" style="width:170px">
+          <input id="fuzz-ck" placeholder="客户端私钥" style="width:170px">
+          <input id="fuzz-replay" placeholder="命中重放代理 http://..." style="flex:1;min-width:190px">
+          <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-sf"> 大量403停止</label>
+          <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-se"> 异常停止</label>
+          <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-sa"> 所有错误停止</label>
+          <input id="fuzz-maxtime" type="number" placeholder="maxtime(s)" style="width:120px">
+          <input id="fuzz-maxtime-job" type="number" placeholder="maxtime-job(s)" style="width:130px">
+        </div>
+      </div>
+      <div class="field">
+        <label>输出行为 / Scraper</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-quiet"> 静默</label>
+          <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-v"> 详细</label>
+          <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-json"> JSON 行输出</label>
+          <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="fuzz-oskip"> 无结果不建文件</label>
+          <input id="fuzz-odir" placeholder="响应保存目录 -od" style="flex:1;min-width:170px">
+          <input id="fuzz-scrapers" placeholder="Scraper 组(默认 all)" style="width:170px">
+          <input id="fuzz-scraperfile" placeholder="自定义 Scraper 文件" style="width:190px">
+        </div>
+      </div>
+      <div class="field">
+        <label>日志(可选)</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="fuzz-audit" placeholder="审计日志文件(全部请求/响应)" style="flex:1;min-width:220px">
+          <input id="fuzz-debug" placeholder="调试日志文件" style="flex:1;min-width:220px">
+        </div>
+      </div>
+    </details>
+
+    <div class="field">
+      <label>结果保存(可选; 代理使用「扫描」页的代理设置)</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="fuzz-ofile" placeholder="输出文件, 如 D:\reports\fuzz.json" style="flex:1;min-width:220px">
+        <select id="fuzz-ofmt">
+          <option value="">(json)</option>
+          <option>json</option><option>ejson</option><option>html</option><option>md</option><option>csv</option><option>ecsv</option><option>all</option>
+        </select>
+      </div>
+    </div>
+    <pre id="fuzz-out" class="recon-out" style="max-height:300px"></pre>
   </section>
 </main>
 
@@ -706,6 +986,13 @@
     el.scrollTop = el.scrollHeight;
   };
 
+  window.addFuzzOut = function(line) {
+    const el = $('fuzz-out');
+    if (!el) { return; }
+    el.textContent += line + '\n';
+    el.scrollTop = el.scrollHeight;
+  };
+
   window.addShellOut = function(chunk) {
     const el = $('shell-term');
     const clean = chunk
@@ -747,6 +1034,10 @@
       whois: $('whois').checked,
       dns_records: $('dnsq').checked,
       use_https: $('https').checked,
+      randomize: $('rand').checked,
+      force_raw: $('force-raw').checked,
+      verbose: $('verbose').checked,
+      max_targets: parseInt($('max-targets').value,10)||0,
     };
   }
 
@@ -786,6 +1077,36 @@
   $('stop').addEventListener('click', function() {
     window.stopScan();
     $('status').textContent = '正在停止...';
+  });
+
+  // Web 侦察(独立标签页: 子域名/目录/头检查/Whois/DNS)
+  $('recon-start').addEventListener('click', async function() {
+    const targetRaw = $('web-target').value.trim();
+    const targets = targetRaw.split(/[,\s;]+/).filter(Boolean);
+    const any = $('dir').checked || $('webcheck').checked || $('sub').checked || $('whois').checked || $('dnsq').checked;
+    if (targets.length === 0) { $('recon').textContent = '请输入目标域名或 IP'; return; }
+    if (!any) { $('recon').textContent = '请至少勾选一项侦察功能'; return; }
+    const body = {
+      targets: targets,
+      ports: $('web-port').value.trim() || '80',
+      dir_search: $('dir').checked,
+      web_check: $('webcheck').checked,
+      sub_brute: $('sub').checked,
+      sub_depth: parseInt($('subdepth').value, 10) || 1,
+      whois: $('whois').checked,
+      dns_records: $('dnsq').checked,
+      use_https: $('https').checked
+    };
+    $('recon').textContent = '';
+    $('recon').dataset.empty = '1';
+    $('recon-start').disabled = true;
+    try {
+      await window.reconStart(JSON.stringify(body));
+      setTimeout(function() { $('recon-start').disabled = false; }, 1000);
+    } catch (e) {
+      $('recon').textContent = '启动失败: ' + String(e);
+      $('recon-start').disabled = false;
+    }
   });
 
   // 路由跟踪
@@ -908,7 +1229,8 @@
   $('poc-start').addEventListener('click', function() {
     const t = $('poc-target').value.trim();
     if (!t) { window.addExploitRecon('请输入目标'); return; }
-    window.pocScan(t, parseInt($('poc-port').value,10)||80);
+    window.pocScanEx(t, parseInt($('poc-port').value,10)||80,
+      $('poc-filter').value.trim(), $('poc-oast').value.trim());
   });
 
   // SSH 爆破 + 弹 shell
@@ -918,9 +1240,22 @@
     window.sshShell(t, parseInt($('ssh-port').value,10)||22);
   });
 
-  // 漏洞报告
+  // SSH 直连
+  $('sshc-start').addEventListener('click', async function() {
+    const t = $('ssh-target').value.trim();
+    const u = $('sshc-user').value.trim();
+    const p = $('sshc-pass').value;
+    if (!t || !u) { window.addExploitRecon('请输入目标与用户名'); return; }
+    const r = await window.sshConnectTerm(t, parseInt($('ssh-port').value,10)||22, u, p).catch(e => String(e));
+    if (r) { window.addExploitRecon('直连失败: ' + r); } else { window.addExploitRecon('已弹出 SSH 命令行窗口'); }
+  });
+
+  // 漏洞报告 / 利用模块列表
   $('vuln-report').addEventListener('click', function() {
     $('vuln-report-out').textContent = window.vulnReport();
+  });
+  $('exploit-list-btn').addEventListener('click', function() {
+    $('vuln-report-out').textContent = window.exploitList();
   });
 
   // 历史查询
@@ -937,6 +1272,173 @@
     const r = window.storeScan(t);
     $('history-output').textContent = r;
   });
+
+  // ---- 工具页 ----
+  $('exp-run').addEventListener('click', async function() {
+    const r = await window.exportData($('exp-format').value, $('exp-name').value.trim()).catch(e => String(e));
+    $('exp-out').textContent = String(r);
+  });
+  $('diff-run').addEventListener('click', function() {
+    const t = $('diff-target').value.trim();
+    if (!t) { $('diff-out').textContent = '请输入目标'; return; }
+    $('diff-out').textContent = window.diffState(t);
+  });
+  let monTimer = null;
+  $('mon-start').addEventListener('click', function() {
+    if (monTimer) { return; }
+    const sec = Math.max(10, parseInt($('mon-interval').value, 10) || 300);
+    $('mon-state').textContent = '运行中, 每 ' + sec + 's';
+    monTimer = setInterval(function() { $('start').click(); }, sec * 1000);
+  });
+  $('mon-stop').addEventListener('click', function() {
+    if (monTimer) { clearInterval(monTimer); monTimer = null; }
+    $('mon-state').textContent = '已停止';
+  });
+  $('market-set').addEventListener('click', function() {
+    window.setMarket($('market-url').value.trim());
+    $('market-set').textContent = '✓';
+    setTimeout(function() { $('market-set').textContent = '设置'; }, 1500);
+  });
+  let resKind = 'poc';
+  const resLoad = async function() {
+    const fn = { poc:'pocList', module:'moduleList', dict:'dictList', shell:'shellList' }[resKind];
+    let list = [];
+    try { list = JSON.parse(await window[fn]() || '[]'); } catch (e) { list = []; }
+    let text = '';
+    for (const it of list) {
+      if (resKind === 'dict') { text += '• ' + it + '\n'; }
+      else { text += '• ' + (it.id || '') + '  ' + (it.name || '') + '  [' + (it.type || '') + (it.severity ? ' ' + it.severity : '') + ']\n'; }
+    }
+    $('res-out').textContent = list.length ? text : '(空)';
+  };
+  document.querySelectorAll('.res-tab').forEach(function(b) {
+    b.addEventListener('click', function() {
+      resKind = b.dataset.res;
+      document.querySelectorAll('.res-tab').forEach(function(x){ x.classList.toggle('primary', x === b); });
+  resLoad();
+    });
+  });
+
+  // ffuf Web 模糊测试
+  function fuzzLines(id) {
+    return $(id).value.split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+  }
+  $('fuzz-start').addEventListener('click', function() {
+    const mode = $('fuzz-mode').value;
+    const url = $('fuzz-url').value.trim();
+    const sub = $('fuzz-sub').value.trim();
+    if (mode === 'url' && (!url || url.indexOf('FUZZ') < 0)) { $('fuzz-out').textContent = '目录/参数模式: URL 必须包含 FUZZ 关键字'; return; }
+    if (mode === 'subdomain' && !sub) { $('fuzz-out').textContent = '子域名模式: 请填写根域名'; return; }
+    if (mode === 'vhost' && !sub) { $('fuzz-out').textContent = '虚拟主机模式: 请填写域名'; return; }
+    if (mode === 'vhost' && !url) { $('fuzz-out').textContent = '虚拟主机模式: 请填写目标 URL(如 http://IP:PORT/)'; return; }
+    $('fuzz-out').textContent = '';
+    const body = {
+      mode: mode,
+      subdomain: mode === 'subdomain' ? sub : '',
+      vhost: mode === 'vhost' ? sub : '',
+      scheme: $('fuzz-scheme').value,
+      port: parseInt($('fuzz-port').value,10)||0,
+      url: url,
+      wordlists: fuzzLines('fuzz-wordlist'),
+      method: $('fuzz-method').value,
+      data: $('fuzz-data').value,
+      headers: fuzzLines('fuzz-headers'),
+      cookies: $('fuzz-cookies').value.trim() ? [$('fuzz-cookies').value.trim()] : [],
+      extensions: $('fuzz-ext').value.trim(),
+      threads: parseInt($('fuzz-threads').value,10)||40,
+      rate: parseInt($('fuzz-rate').value,10)||0,
+      delay: $('fuzz-delay').value.trim(),
+      timeout: parseInt($('fuzz-timeout').value,10)||10,
+      proxy: $('proxy').value.trim(),
+      follow: $('fuzz-follow').checked,
+      autocalibration: $('fuzz-ac').checked,
+      recursion: $('fuzz-rec').checked,
+      recursion_depth: parseInt($('fuzz-depth').value,10)||2,
+      recursion_strategy: $('fuzz-rec-strategy').value,
+      raw: $('fuzz-raw').checked,
+      ignore_body: $('fuzz-ignore-body').checked,
+      http2: $('fuzz-http2').checked,
+      mc: $('fuzz-mc').value.trim(), ms: $('fuzz-ms').value.trim(),
+      mw: $('fuzz-mw').value.trim(), ml: $('fuzz-ml').value.trim(),
+      mr: $('fuzz-mr').value.trim(), mt: $('fuzz-mt').value.trim(),
+      fc: $('fuzz-fc').value.trim(), fs: $('fuzz-fs').value.trim(),
+      fw: $('fuzz-fw').value.trim(), fl: $('fuzz-fl').value.trim(),
+      fr: $('fuzz-fr').value.trim(), ft: $('fuzz-ft').value.trim(),
+      matcher_mode: $('fuzz-mmode').value, filter_mode: $('fuzz-fmode').value,
+      autocalibration_keyword: $('fuzz-ac-keyword').value.trim(),
+      autocalibration_per_host: $('fuzz-ac-perhost').checked,
+      autocalibration_strategies: $('fuzz-ac-strategies').value.trim() ? $('fuzz-ac-strategies').value.split(',').map(function(s){ return s.trim(); }).filter(Boolean) : [],
+      autocalibration_strings: $('fuzz-ac-strings').value.trim() ? $('fuzz-ac-strings').value.split(',').map(function(s){ return s.trim(); }).filter(Boolean) : [],
+      input_mode: $('fuzz-input-mode').value,
+      input_num: parseInt($('fuzz-input-num').value,10)||0,
+      input_shell: $('fuzz-input-shell').value.trim(),
+      input_commands: fuzzLines('fuzz-input-cmd'),
+      request_file: $('fuzz-request').value.trim(),
+      request_proto: $('fuzz-request-proto').value,
+      encoders: $('fuzz-enc').value.trim() ? [$('fuzz-enc').value.trim()] : [],
+      ignore_wordlist_comments: $('fuzz-ic').checked,
+      dirsearch_compat: $('fuzz-dsc').checked,
+      stop_on_403: $('fuzz-sf').checked,
+      stop_on_errors: $('fuzz-se').checked,
+      stop_on_all: $('fuzz-sa').checked,
+      maxtime: parseInt($('fuzz-maxtime').value,10)||0,
+      maxtime_job: parseInt($('fuzz-maxtime-job').value,10)||0,
+      quiet: $('fuzz-quiet').checked,
+      verbose: $('fuzz-v').checked,
+      json: $('fuzz-json').checked,
+      sni: $('fuzz-sni').value.trim(),
+      'client-cert': $('fuzz-cc').value.trim(),
+      'client-key': $('fuzz-ck').value.trim(),
+      replay_proxy_url: $('fuzz-replay').value.trim(),
+      scrapers: $('fuzz-scrapers').value.trim(),
+      scraperfile: $('fuzz-scraperfile').value.trim(),
+      audit_log: $('fuzz-audit').value.trim(),
+      debug_log: $('fuzz-debug').value.trim(),
+      output_directory: $('fuzz-odir').value.trim(),
+      output_skip_empty: $('fuzz-oskip').checked,
+      output_file: $('fuzz-ofile').value.trim(),
+      output_format: $('fuzz-ofmt').value
+    };
+    $('fuzz-start').disabled = true;
+    window.fuzzStart(JSON.stringify(body)).then(function() {
+      $('fuzz-start').disabled = false;
+    }).catch(function(e) {
+      $('fuzz-out').textContent = '启动失败: ' + String(e);
+      $('fuzz-start').disabled = false;
+    });
+  });
+  $('fuzz-stop').addEventListener('click', function() {
+    window.fuzzStop();
+    window.addFuzzOut('(已请求停止)');
+  });
+  $('fuzz-mode').addEventListener('change', function() {
+    const m = this.value;
+    if (m === 'subdomain') {
+      $('fuzz-url').placeholder = '子域名模式可留空, 自动生成 ' + $('fuzz-scheme').value + '://FUZZ.<域名>';
+    } else if (m === 'vhost') {
+      $('fuzz-url').placeholder = 'http://IP:PORT/ (目标直连地址, Host 用 FUZZ.<域名>)';
+    } else {
+      $('fuzz-url').placeholder = 'http://target/FUZZ 或 http://target/api?x=FUZZ';
+    }
+  });
+  $('res-add').addEventListener('click', async function() {
+    const p = $('res-path').value.trim();
+    if (!p) { $('res-out').textContent = '请输入文件路径'; return; }
+    const fn = { poc:'pocAdd', module:'moduleAdd', dict:'dictAdd', shell:'shellAdd' }[resKind];
+    const r = await window[fn](p).catch(e => String(e));
+    $('res-out').textContent = r ? ('添加失败: ' + r) : '已添加';
+    if (!r) { resLoad(); }
+  });
+  $('res-remove').addEventListener('click', async function() {
+    const id = $('res-id').value.trim();
+    if (!id) { $('res-out').textContent = '请输入 ID'; return; }
+    const fn = { poc:'pocRemove', module:'moduleRemove', shell:'shellRemove' }[resKind];
+    if (!fn) { $('res-out').textContent = '字典不支持删除'; return; }
+    const r = await window[fn](id).catch(e => String(e));
+    $('res-out').textContent = r ? ('删除失败: ' + r) : '已删除';
+    if (!r) { resLoad(); }
+  });
+  resLoad();
 
   // ---- 插件管理 ----
   let allPlugins = [];

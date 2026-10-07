@@ -1,0 +1,338 @@
+{
+  "repo": "https://github.com/swisskyrepo/PayloadsAllTheThings",
+  "commit": "3ac27901c711bdf3f5b65a7b1d1820a1f65bd09a",
+  "license": "MIT (Copyright (c) 2019 Swissky)",
+  "per_file_audit": "逐文件扫描: 3 个 CC/BSD 标记为误报(十六进制/URL/正文), 1 个 GPL 文件(Upload Insecure Files/Picture Compression/createBulletproofJPG.py)已排除; 其余 .txt 均无冲突许可",
+  "files": [
+    {
+      "name": "API Key Leaks/Files/MachineKeys",
+      "lines": 3571,
+      "bytes": 619009
+    },
+    {
+      "name": "CRLF Injection/Files/crlfinjection",
+      "lines": 17,
+      "bytes": 588
+    },
+    {
+      "name": "Command Injection/Intruder/command-execution-unix",
+      "lines": 79,
+      "bytes": 1142
+    },
+    {
+      "name": "Command Injection/Intruder/command_exec",
+      "lines": 448,
+      "bytes": 20276
+    },
+    {
+      "name": "Directory Traversal/Intruder/deep_traversal",
+      "lines": 677,
+      "bytes": 59465
+    },
+    {
+      "name": "Directory Traversal/Intruder/directory_traversal",
+      "lines": 140,
+      "bytes": 8767
+    },
+    {
+      "name": "Directory Traversal/Intruder/dotdotpwn",
+      "lines": 21144,
+      "bytes": 1872006
+    },
+    {
+      "name": "Directory Traversal/Intruder/traversals-8-deep-exotic-encoding",
+      "lines": 652,
+      "bytes": 59204
+    },
+    {
+      "name": "File Inclusion/Intruders/BSD-files",
+      "lines": 13,
+      "bytes": 357
+    },
+    {
+      "name": "File Inclusion/Intruders/JHADDIX_LFI",
+      "lines": 879,
+      "bytes": 28366
+    },
+    {
+      "name": "File Inclusion/Intruders/LFI-FD-check",
+      "lines": 39,
+      "bytes": 655
+    },
+    {
+      "name": "File Inclusion/Intruders/LFI-WindowsFileCheck",
+      "lines": 68,
+      "bytes": 1933
+    },
+    {
+      "name": "File Inclusion/Intruders/Linux-files",
+      "lines": 62,
+      "bytes": 1555
+    },
+    {
+      "name": "File Inclusion/Intruders/List_Of_File_To_Include",
+      "lines": 680,
+      "bytes": 18143
+    },
+    {
+      "name": "File Inclusion/Intruders/List_Of_File_To_Include_NullByteAdded",
+      "lines": 213,
+      "bytes": 6406
+    },
+    {
+      "name": "File Inclusion/Intruders/Mac-files",
+      "lines": 8,
+      "bytes": 233
+    },
+    {
+      "name": "File Inclusion/Intruders/Traversal",
+      "lines": 2501,
+      "bytes": 216309
+    },
+    {
+      "name": "File Inclusion/Intruders/Web-files",
+      "lines": 14,
+      "bytes": 236
+    },
+    {
+      "name": "File Inclusion/Intruders/Windows-files",
+      "lines": 212,
+      "bytes": 7065
+    },
+    {
+      "name": "File Inclusion/Intruders/dot-slash-PathTraversal_and_LFI_pairing",
+      "lines": 659,
+      "bytes": 55435
+    },
+    {
+      "name": "File Inclusion/Intruders/php-filter-iconv",
+      "lines": 50,
+      "bytes": 1390
+    },
+    {
+      "name": "File Inclusion/Intruders/simple-check",
+      "lines": 10,
+      "bytes": 149
+    },
+    {
+      "name": "Insecure Management Interface/Intruder/springboot_actuator",
+      "lines": 52,
+      "bytes": 704
+    },
+    {
+      "name": "Insecure Source Code Management/Files/github-dorks",
+      "lines": 1401,
+      "bytes": 29686
+    },
+    {
+      "name": "LDAP Injection/Intruder/LDAP_FUZZ",
+      "lines": 32,
+      "bytes": 308
+    },
+    {
+      "name": "LDAP Injection/Intruder/LDAP_FUZZ_SMALL",
+      "lines": 20,
+      "bytes": 209
+    },
+    {
+      "name": "LDAP Injection/Intruder/LDAP_attributes",
+      "lines": 27,
+      "bytes": 180
+    },
+    {
+      "name": "NoSQL Injection/Intruder/MongoDB",
+      "lines": 20,
+      "bytes": 561
+    },
+    {
+      "name": "NoSQL Injection/Intruder/NoSQL",
+      "lines": 26,
+      "bytes": 696
+    },
+    {
+      "name": "Open Redirect/Intruder/Open-Redirect-payloads",
+      "lines": 234,
+      "bytes": 8244
+    },
+    {
+      "name": "Open Redirect/Intruder/open_redirect_wordlist",
+      "lines": 18,
+      "bytes": 865
+    },
+    {
+      "name": "Open Redirect/Intruder/openredirects",
+      "lines": 67,
+      "bytes": 2197
+    },
+    {
+      "name": "SQL Injection/Intruder/Auth_Bypass",
+      "lines": 78,
+      "bytes": 1202
+    },
+    {
+      "name": "SQL Injection/Intruder/Auth_Bypass2",
+      "lines": 119,
+      "bytes": 1854
+    },
+    {
+      "name": "SQL Injection/Intruder/FUZZDB_MSSQL",
+      "lines": 17,
+      "bytes": 1058
+    },
+    {
+      "name": "SQL Injection/Intruder/FUZZDB_MSSQL-WHERE_Time",
+      "lines": 40,
+      "bytes": 1223
+    },
+    {
+      "name": "SQL Injection/Intruder/FUZZDB_MSSQL_Enumeration",
+      "lines": 15,
+      "bytes": 717
+    },
+    {
+      "name": "SQL Injection/Intruder/FUZZDB_MYSQL",
+      "lines": 6,
+      "bytes": 108
+    },
+    {
+      "name": "SQL Injection/Intruder/FUZZDB_MySQL-WHERE_Time",
+      "lines": 45,
+      "bytes": 1845
+    },
+    {
+      "name": "SQL Injection/Intruder/FUZZDB_MySQL_ReadLocalFiles",
+      "lines": 3,
+      "bytes": 210
+    },
+    {
+      "name": "SQL Injection/Intruder/FUZZDB_Oracle",
+      "lines": 55,
+      "bytes": 7873
+    },
+    {
+      "name": "SQL Injection/Intruder/FUZZDB_Postgres_Enumeration",
+      "lines": 19,
+      "bytes": 660
+    },
+    {
+      "name": "SQL Injection/Intruder/Generic_ErrorBased",
+      "lines": 154,
+      "bytes": 2829
+    },
+    {
+      "name": "SQL Injection/Intruder/Generic_Fuzz",
+      "lines": 12,
+      "bytes": 80
+    },
+    {
+      "name": "SQL Injection/Intruder/Generic_TimeBased",
+      "lines": 105,
+      "bytes": 2529
+    },
+    {
+      "name": "SQL Injection/Intruder/Generic_UnionSelect",
+      "lines": 421,
+      "bytes": 37012
+    },
+    {
+      "name": "SQL Injection/Intruder/SQLi_Polyglots",
+      "lines": 2,
+      "bytes": 348
+    },
+    {
+      "name": "Server Side Include Injection/Files/ssi_esi",
+      "lines": 92,
+      "bytes": 3399
+    },
+    {
+      "name": "Web Cache Deception/Intruders/param_miner_lowercase_headers",
+      "lines": 1125,
+      "bytes": 17064
+    },
+    {
+      "name": "XSS Injection/Intruders/0xcela_event_handlers",
+      "lines": 105,
+      "bytes": 1192
+    },
+    {
+      "name": "XSS Injection/Intruders/BRUTELOGIC-XSS-JS",
+      "lines": 17,
+      "bytes": 378
+    },
+    {
+      "name": "XSS Injection/Intruders/BRUTELOGIC-XSS-STRINGS",
+      "lines": 110,
+      "bytes": 4006
+    },
+    {
+      "name": "XSS Injection/Intruders/IntrudersXSS",
+      "lines": 176,
+      "bytes": 11655
+    },
+    {
+      "name": "XSS Injection/Intruders/JHADDIX_XSS",
+      "lines": 107,
+      "bytes": 18556
+    },
+    {
+      "name": "XSS Injection/Intruders/MarioXSSVectors",
+      "lines": 250,
+      "bytes": 22366
+    },
+    {
+      "name": "XSS Injection/Intruders/RSNAKE_XSS",
+      "lines": 73,
+      "bytes": 4185
+    },
+    {
+      "name": "XSS Injection/Intruders/XSSDetection",
+      "lines": 202,
+      "bytes": 8116
+    },
+    {
+      "name": "XSS Injection/Intruders/XSS_Polyglots",
+      "lines": 16,
+      "bytes": 1938
+    },
+    {
+      "name": "XSS Injection/Intruders/jsonp_endpoint",
+      "lines": 56,
+      "bytes": 5638
+    },
+    {
+      "name": "XSS Injection/Intruders/port_swigger_xss_cheatsheet_event_handlers",
+      "lines": 114,
+      "bytes": 1402
+    },
+    {
+      "name": "XSS Injection/Intruders/xss_alert",
+      "lines": 653,
+      "bytes": 45242
+    },
+    {
+      "name": "XSS Injection/Intruders/xss_alert_identifiable",
+      "lines": 665,
+      "bytes": 47319
+    },
+    {
+      "name": "XSS Injection/Intruders/xss_payloads_quick",
+      "lines": 34,
+      "bytes": 1365
+    },
+    {
+      "name": "XSS Injection/Intruders/xss_swf_fuzz",
+      "lines": 24,
+      "bytes": 786
+    },
+    {
+      "name": "XXE Injection/Intruders/XXE_Fuzzing",
+      "lines": 48,
+      "bytes": 4493
+    },
+    {
+      "name": "XXE Injection/Intruders/xml-attacks",
+      "lines": 66,
+      "bytes": 7875
+    }
+  ]
+}

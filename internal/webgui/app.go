@@ -8,12 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/webview/webview_go"
+	"portscanner/internal/ffufrun"
 	"portscanner/internal/scanner"
 )
 
@@ -47,6 +49,10 @@ type scanRequest struct {
 	Whois         bool     `json:"whois"`
 	DNSRecords    bool     `json:"dns_records"`
 	UseHTTPS      bool     `json:"use_https"`
+	Randomize     bool     `json:"randomize"`
+	ForceRaw      bool     `json:"force_raw"`
+	Verbose       bool     `json:"verbose"`
+	MaxTargets    int      `json:"max_targets"`
 }
 
 // Run 启动基于 WebView 的图形界面
@@ -79,6 +85,9 @@ func Run() {
 	}
 	recon2 := func(line string) {
 		dispatchJS("window.addExploitRecon(" + strconv.Quote(line) + ")")
+	}
+	fuzzOut := func(line string) {
+		dispatchJS("window.addFuzzOut(" + strconv.Quote(line) + ")")
 	}
 	// 交互式 shell 会话(纯 GUI 内嵌终端)
 	var shellMu sync.Mutex
@@ -187,6 +196,25 @@ func Run() {
 		if req.DirSearch || req.WebCheck || req.SubBrute || req.Whois || req.DNSRecords {
 			go runRecon(req, recon)
 		}
+		return nil
+	})
+
+	// 独立 Web 侦察(子域名爆破/目录爆破/Whois/DNS 等, 无需先做端口扫描)
+	w.Bind("reconStart", func(optsJSON string) error {
+		req := scanRequest{}
+		if err := json.Unmarshal([]byte(optsJSON), &req); err != nil {
+			return err
+		}
+		if len(req.Targets) == 0 {
+			return fmt.Errorf("请先在「扫描目标」输入框填写目标")
+		}
+		if !(req.DirSearch || req.WebCheck || req.SubBrute || req.Whois || req.DNSRecords) {
+			return fmt.Errorf("请至少勾选一项侦察功能")
+		}
+		if req.Ports == "" || req.Ports == "1-65535" {
+			req.Ports = "80"
+		}
+		go runRecon(req, recon)
 		return nil
 	})
 
@@ -426,12 +454,12 @@ func Run() {
 				return
 			}
 			recon2(fmt.Sprintf("[成功] %s:%d  用户:%s 密码:%s", ip, port, user, pass))
-			// 弹新命令行窗口运行交互式 SSH
+			// 弹新命令行窗口运行交互式 SSH(跨平台)
 			exe, _ := os.Executable()
-			cmd := exec.Command("cmd", "/c", "start", "NetScan-SSH", exe,
+			if err := runInTerminal(exe, []string{
 				"--ssh-connect", "-target", ip, "-p", strconv.Itoa(port),
-				"--ssh-user", user, "--ssh-pass", pass)
-			if err := cmd.Start(); err != nil {
+				"--ssh-user", user, "--ssh-pass", pass,
+			}); err != nil {
 				recon2("弹出命令行失败: " + err.Error())
 				return
 			}
@@ -533,6 +561,260 @@ func Run() {
 	w.Bind("uninstallPlugin", func(id string) error { return pm.Remove(id) })
 	w.Bind("updatePlugin", func(id string) error { return scanner.InstallMarketPlugin(id) })
 
+	// ---- 高级工具(GUI 全功能集成) ----
+
+	// POC 扫描(定向过滤 --poc-id + OAST 回调 --oast)
+	w.Bind("pocScanEx", func(target string, port int, filter, oast string) error {
+		go func() {
+			ip, err := resolveHost(target)
+			if err != nil {
+				recon2("无法解析 " + target)
+				return
+			}
+			if port <= 0 {
+				port = 80
+			}
+			if oast != "" {
+				if err := scanner.StartOAST(oast); err != nil {
+					recon2("OAST 启动失败: " + err.Error())
+				} else {
+					recon2("OAST 回调已启用: " + oast)
+				}
+			}
+			recon2(fmt.Sprintf("========== 扫描 Web POC %s:%d ==========", ip, port))
+			if filter != "" {
+				recon2("POC 过滤: " + filter)
+			}
+			var hits []scanner.VulnHit
+			if filter != "" {
+				hits = scanner.ScanPOCsFiltered(ip, port, 3*time.Second, filter)
+			} else {
+				hits = scanner.ScanPOCs(ip, port, 3*time.Second)
+			}
+			if len(hits) == 0 {
+				recon2("未命中任何 POC")
+			} else {
+				recon2(fmt.Sprintf("命中 %d 个 POC:", len(hits)))
+				for _, h := range hits {
+					recon2(fmt.Sprintf("● %s\n  复现: %s", h.Name, h.Steps))
+				}
+			}
+			recon2("========== POC 扫描完成 ==========")
+		}()
+		return nil
+	})
+
+	// 利用模块全列表
+	w.Bind("exploitList", func() string {
+		return strings.Join(scanner.ExploitList(), "\n")
+	})
+
+	// SSH 直连(已知凭据, 弹交互式命令行)
+	w.Bind("sshConnectTerm", func(target string, port int, user, pass string) error {
+		ip, err := resolveHost(target)
+		if err != nil {
+			return err
+		}
+		if port <= 0 {
+			port = 22
+		}
+		exe, _ := os.Executable()
+		return runInTerminal(exe, []string{
+			"--ssh-connect", "-target", ip, "-p", strconv.Itoa(port),
+			"--ssh-user", user, "--ssh-pass", pass,
+		})
+	})
+
+	// 结果导出(html/json/csv/grep/xml/normal)
+	w.Bind("exportData", func(format, name string) (string, error) {
+		resultMu.Lock()
+		rs := make([]scanner.Result, len(collected))
+		copy(rs, collected)
+		target := lastTarget
+		ports := lastPorts
+		resultMu.Unlock()
+		if strings.TrimSpace(name) == "" {
+			name = "netscan-export"
+		}
+		name = filepath.Base(strings.TrimSpace(name))
+		dir := downloadDir()
+		switch strings.ToLower(format) {
+		case "html":
+			fp := filepath.Join(dir, name+".html")
+			return fp, scanner.WriteHTMLReport(fp, target, ports, rs)
+		case "json":
+			b, _ := json.MarshalIndent(rs, "", "  ")
+			fp := filepath.Join(dir, name+".json")
+			return fp, os.WriteFile(fp, b, 0o644)
+		case "csv":
+			var sb strings.Builder
+			sb.WriteString("ip,port,protocol,state,service,version,vuln\n")
+			for _, r := range rs {
+				sb.WriteString(fmt.Sprintf("%s,%d,%s,%s,%s,%s,%s\n", r.IP, r.Port, r.Protocol,
+					r.State, csvCell(r.Service), csvCell(r.Version), csvCell(r.Vuln)))
+			}
+			fp := filepath.Join(dir, name+".csv")
+			return fp, os.WriteFile(fp, []byte(sb.String()), 0o644)
+		case "grep":
+			var sb strings.Builder
+			for _, r := range rs {
+				if r.State == scanner.StateOpen {
+					sb.WriteString(fmt.Sprintf("%s:%d/open/%s\n", r.IP, r.Port, r.Protocol))
+				}
+			}
+			fp := filepath.Join(dir, name+".grep")
+			return fp, os.WriteFile(fp, []byte(sb.String()), 0o644)
+		case "xml":
+			var sb strings.Builder
+			sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<netscan>\n")
+			for _, r := range rs {
+				sb.WriteString(fmt.Sprintf("  <host ip=%q port=%q protocol=%q state=%q service=%q version=%q/>\n",
+					xmlEsc(r.IP), strconv.Itoa(r.Port), xmlEsc(r.Protocol), xmlEsc(string(r.State)),
+					xmlEsc(r.Service), xmlEsc(r.Version)))
+			}
+			sb.WriteString("</netscan>\n")
+			fp := filepath.Join(dir, name+".xml")
+			return fp, os.WriteFile(fp, []byte(sb.String()), 0o644)
+		default:
+			var sb strings.Builder
+			for _, r := range rs {
+				sb.WriteString(fmt.Sprintf("%-20s %5d/%-3s %-12s %-16s %s\n", r.IP, r.Port,
+					r.Protocol, string(r.State), r.Service, r.Version))
+			}
+			fp := filepath.Join(dir, name+".txt")
+			return fp, os.WriteFile(fp, []byte(sb.String()), 0o644)
+		}
+	})
+
+	// 资产对比: 与上次状态比对并保存当前状态
+	w.Bind("diffState", func(target string) string {
+		resultMu.Lock()
+		rs := make([]scanner.Result, len(collected))
+		copy(rs, collected)
+		resultMu.Unlock()
+		var items []string
+		for _, r := range rs {
+			if r.State == "up" {
+				items = append(items, r.IP)
+			}
+			if r.State == scanner.StateOpen {
+				items = append(items, fmt.Sprintf("%s:%d/%s", r.IP, r.Port, r.Protocol))
+			}
+		}
+		added, removed, err := scanner.DiffState(scanner.DefaultStateDir(), target, items)
+		if err != nil {
+			return "对比失败: " + err.Error()
+		}
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("与上次对比 %s: 新增 %d, 消失 %d (已保存当前状态)\n", target, len(added), len(removed)))
+		for _, x := range added {
+			sb.WriteString("  + " + x + "\n")
+		}
+		for _, x := range removed {
+			sb.WriteString("  - " + x + "\n")
+		}
+		return sb.String()
+	})
+
+	// 资源管理器: POC / 模块 / 字典 / Shell 链
+	w.Bind("pocList", func() string {
+		b, _ := json.Marshal(scanner.OpenPOCManager("").List())
+		return string(b)
+	})
+	w.Bind("pocAdd", func(path string) error { return scanner.OpenPOCManager("").Add(path) })
+	w.Bind("pocRemove", func(id string) error { return scanner.OpenPOCManager("").Remove(id) })
+	w.Bind("moduleList", func() string {
+		b, _ := json.Marshal(scanner.OpenModuleManager("").List())
+		return string(b)
+	})
+	w.Bind("moduleAdd", func(path string) error {
+		m := scanner.OpenModuleManager("")
+		if err := m.Add(path); err != nil {
+			return err
+		}
+		m.Load()
+		return nil
+	})
+	w.Bind("moduleRemove", func(id string) error { return scanner.OpenModuleManager("").Remove(id) })
+	w.Bind("dictList", func() string {
+		b, _ := json.Marshal(scanner.OpenDictManager("").List())
+		return string(b)
+	})
+	w.Bind("dictAdd", func(path string) error { return scanner.OpenDictManager("").Add(path) })
+	w.Bind("shellList", func() string {
+		b, _ := json.Marshal(scanner.OpenShellChainManager("").List())
+		return string(b)
+	})
+	w.Bind("shellAdd", func(path string) error { return scanner.OpenShellChainManager("").Add(path) })
+	w.Bind("shellRemove", func(id string) error { return scanner.OpenShellChainManager("").Remove(id) })
+
+	// 插件市场地址
+	w.Bind("setMarket", func(u string) {
+		scanner.SetMarketURL(strings.TrimRight(u, "/"))
+	})
+
+	// ffuf 模糊测试
+	var fuzzMu sync.Mutex
+	var fuzzRunner *ffufrun.Runner
+	w.Bind("fuzzStart", func(cfgJSON string) error {
+		cfg := ffufrun.Config{}
+		if err := json.Unmarshal([]byte(cfgJSON), &cfg); err != nil {
+			return err
+		}
+		mode := strings.ToLower(cfg.Mode)
+		if mode == "subdomain" || mode == "sub" {
+			if cfg.Subdomain == "" {
+				return fmt.Errorf("子域名模式需要填写根域名")
+			}
+		} else if mode == "vhost" {
+			if cfg.VHost == "" || cfg.URL == "" {
+				return fmt.Errorf("虚拟主机模式需要填写域名与目标 URL")
+			}
+		} else if !strings.Contains(cfg.URL, "FUZZ") && cfg.Request == "" {
+			return fmt.Errorf("URL 必须包含 FUZZ 关键字")
+		}
+		if cfg.Wordlist == "" && len(cfg.Wordlists) == 0 && cfg.Request == "" && len(cfg.InputCommands) == 0 {
+			words := scanner.DefaultDirWordlist()
+			p := filepath.Join(os.TempDir(), "netscan_fuzz_wordlist.txt")
+			if err := os.WriteFile(p, []byte(strings.Join(words, "\n")+"\n"), 0o600); err != nil {
+				return fmt.Errorf("写入内置字典失败: %w", err)
+			}
+			cfg.Wordlists = append(cfg.Wordlists, p)
+		}
+		fuzzMu.Lock()
+		old := fuzzRunner
+		fuzzMu.Unlock()
+		if old != nil {
+			old.Stop()
+			old.Wait()
+		}
+		r, err := ffufrun.Run(cfg, fuzzOut)
+		if err != nil {
+			return err
+		}
+		fuzzMu.Lock()
+		fuzzRunner = r
+		fuzzMu.Unlock()
+		go func() {
+			r.Wait()
+			fuzzOut("========== fuzz 完成 ==========")
+			fuzzMu.Lock()
+			if fuzzRunner == r {
+				fuzzRunner = nil
+			}
+			fuzzMu.Unlock()
+		}()
+		return nil
+	})
+	w.Bind("fuzzStop", func() {
+		fuzzMu.Lock()
+		r := fuzzRunner
+		fuzzMu.Unlock()
+		if r != nil {
+			r.Stop()
+		}
+	})
+
 	w.SetHtml(indexHTML)
 	w.Run()
 }
@@ -587,6 +869,12 @@ func buildOptions(req scanRequest) scanner.Options {
 	opts.StopAfterHost = req.StopAfter
 	opts.ProxyURL = req.Proxy
 	opts.Rate = req.Rate
+	opts.Randomize = req.Randomize
+	opts.Verbose = req.Verbose
+	opts.ForceRaw = req.ForceRaw
+	if req.MaxTargets > 0 {
+		opts.MaxTargets = req.MaxTargets
+	}
 
 	var types []scanner.ScanType
 	for _, t := range req.ScanTypes {
@@ -688,6 +976,37 @@ func resolveHost(s string) (string, error) {
 	return ips[0].String(), nil
 }
 
+// runInTerminal 在新终端窗口运行命令(跨平台)
+func runInTerminal(exe string, args []string) error {
+	switch runtime.GOOS {
+	case "windows":
+		a := append([]string{"/c", "start", "NetScan-SSH", exe}, args...)
+		return exec.Command("cmd", a...).Start()
+	case "darwin":
+		cmdline := "'" + strings.ReplaceAll(exe, "'", `'\''`) + "'"
+		for _, a := range args {
+			cmdline += " '" + strings.ReplaceAll(a, "'", `'\''`) + "'"
+		}
+		script := `tell application "Terminal" to do script ` + strconv.Quote(cmdline)
+		return exec.Command("osascript", "-e", script).Start()
+	default: // linux / freebsd 等
+		candidates := []struct{ name, flag string }{
+			{"x-terminal-emulator", "-e"},
+			{"gnome-terminal", "--"},
+			{"konsole", "-e"},
+			{"xfce4-terminal", "-x"},
+			{"xterm", "-e"},
+		}
+		for _, c := range candidates {
+			if _, err := exec.LookPath(c.name); err == nil {
+				a := append([]string{c.flag, exe}, args...)
+				return exec.Command(c.name, a...).Start()
+			}
+		}
+		return fmt.Errorf("未找到可用终端模拟器(x-terminal-emulator/gnome-terminal/konsole/xterm)")
+	}
+}
+
 // downloadDir 返回 HTML 报告保存目录(优先 Downloads, 回退到用户主目录)
 func downloadDir() string {
 	home, _ := os.UserHomeDir()
@@ -719,4 +1038,15 @@ func firstPort(spec string, def int) int {
 		return n
 	}
 	return def
+}
+
+func csvCell(s string) string {
+	if strings.ContainsAny(s, ",\"\n") {
+		return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
+	}
+	return s
+}
+
+func xmlEsc(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "\"", "&quot;").Replace(s)
 }

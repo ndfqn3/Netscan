@@ -8,12 +8,17 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dist = Join-Path $root "dist"
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 
-# 版本号: 从 git tag 自动注入, 无 tag 时用 commit hash
+# 版本号: 优先读取仓库根 VERSION 文件, 否则从 git tag 自动注入, 无 tag 时用 commit hash
 $version = "dev"
-try {
-    $v = git -C $root describe --tags --always --dirty 2>$null
-    if ($v) { $version = $v.Trim() }
-} catch { $version = "dev" }
+$vf = Join-Path $root "VERSION"
+if (Test-Path $vf) {
+    $version = (Get-Content $vf -TotalCount 1).Trim()
+} else {
+    try {
+        $v = git -C $root describe --tags --always --dirty 2>$null
+        if ($v) { $version = $v.Trim() }
+    } catch { $version = "dev" }
+}
 Write-Host "版本: $version"
 
 function ArchName([string]$arch) {

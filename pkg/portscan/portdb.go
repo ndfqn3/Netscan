@@ -373,6 +373,9 @@ func parsePortSpec(spec string) []int {
 			if err1 != nil || err2 != nil {
 				continue
 			}
+			if hi < 1 || lo > 65535 {
+				continue
+			}
 			if lo < 1 {
 				lo = 1
 			}

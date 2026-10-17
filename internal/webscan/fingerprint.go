@@ -191,7 +191,10 @@ func joinFp(primary string, techs []string, skip string) string {
 }
 
 func fetchPage(client *http.Client, url string, timeout time.Duration) (string, http.Header) {
-	req, _ := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", nil
+	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetScan/2.0")
 	resp, err := client.Do(req)
 	if err != nil {

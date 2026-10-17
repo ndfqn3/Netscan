@@ -372,8 +372,81 @@ func (t *POCTemplate) applyExtractors(rc *renderContext, body, headers string) {
 	}
 }
 
-// jsonPathSimple 简易 JSON 路径提取(.a.b / .a[0].b / "a b"), 失败返回空
+// jsonPathSimple 简易 JSON 路径提取(.a.b / .a[0].b / $.a), 基于 encoding/json 逐层遍历, 失败返回空
 func jsonPathSimple(s, path string) string {
+	var root interface{}
+	if err := json.Unmarshal([]byte(s), &root); err != nil {
+		return ""
+	}
+	p := strings.TrimSpace(path)
+	p = strings.TrimPrefix(p, "$")
+	p = strings.TrimPrefix(p, ".")
+	if p == "" {
+		return jsonScalarString(root)
+	}
+	cur := root
+	for _, seg := range strings.Split(p, ".") {
+		if seg == "" {
+			continue
+		}
+		name := seg
+		idx := -1
+		if i := strings.IndexByte(seg, '['); i >= 0 {
+			if j := strings.IndexByte(seg, ']'); j > i {
+				if n, err := strconv.Atoi(strings.TrimSpace(seg[i+1 : j])); err == nil {
+					idx = n
+				}
+				name = seg[:i]
+			}
+		}
+		if name != "" {
+			m, ok := cur.(map[string]interface{})
+			if !ok {
+				return ""
+			}
+			v, ok := m[name]
+			if !ok {
+				return ""
+			}
+			cur = v
+		}
+		if idx >= 0 {
+			arr, ok := cur.([]interface{})
+			if !ok || idx >= len(arr) {
+				return ""
+			}
+			cur = arr[idx]
+		}
+	}
+	return jsonScalarString(cur)
+}
+
+func jsonScalarString(v interface{}) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return x
+	case bool:
+		return strconv.FormatBool(x)
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatInt(int64(x), 10)
+		}
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	case json.Number:
+		return x.String()
+	default:
+		b, err := json.Marshal(x)
+		if err != nil {
+			return ""
+		}
+		return string(b)
+	}
+}
+
+// jsonPathSimpleLegacy 旧实现(字符串搜索), 仅保留供对比
+func jsonPathSimpleLegacy(s, path string) string {
 	segs := strings.Split(strings.TrimPrefix(strings.TrimSpace(path), "."), ".")
 	cur := s
 	for si, seg := range segs {

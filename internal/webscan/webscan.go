@@ -88,6 +88,9 @@ func SubdomainWordlist() []string {
 
 // DirSearch 对目标 Web 服务进行目录/文件爆破
 func DirSearch(host string, port int, https bool, concurrency int, timeout time.Duration, onFound func(path string, status int, size int64)) {
+	if onFound == nil {
+		onFound = func(string, int, int64) {}
+	}
 	if concurrency <= 0 {
 		concurrency = 30
 	}
@@ -187,8 +190,30 @@ func WebHeaderCheck(host string, port int, https bool, timeout time.Duration) (m
 	return headers, issues
 }
 
+// lookupHostT / lookupAddrT 带超时与取消的 DNS 查询
+func lookupHostT(name string, timeout time.Duration) ([]string, error) {
+	if timeout <= 0 {
+		timeout = 3 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return net.DefaultResolver.LookupHost(ctx, name)
+}
+
+func lookupAddrT(ip string, timeout time.Duration) ([]string, error) {
+	if timeout <= 0 {
+		timeout = 3 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return net.DefaultResolver.LookupAddr(ctx, ip)
+}
+
 // SubdomainBrute 子域名爆破(广度优先, 支持反向 DNS 递归发现, 深度受 depth 限制)
 func SubdomainBrute(domain string, depth int, concurrency int, timeout time.Duration, onFound func(sub string, ip string)) {
+	if onFound == nil {
+		onFound = func(string, string) {}
+	}
 	if concurrency <= 0 {
 		concurrency = 50
 	}
@@ -205,7 +230,7 @@ func SubdomainBrute(domain string, depth int, concurrency int, timeout time.Dura
 	// 通配符 DNS 检测: 随机不存在的子域名若能解析, 说明目标使用通配符解析, 记录其 /24 网段用于过滤
 	wildcardPrefixes := map[string]bool{}
 	probeName := "netscan-wildcard-" + netx.Itoa(int(time.Now().UnixNano()%100000)) + "." + domain
-	if ips, err := net.LookupHost(probeName); err == nil {
+	if ips, err := lookupHostT(probeName, timeout); err == nil {
 		for _, ip := range ips {
 			if parts := strings.Split(ip, "."); len(parts) == 4 {
 				wildcardPrefixes[parts[0]+"."+parts[1]+"."+parts[2]+"."] = true
@@ -226,7 +251,7 @@ func SubdomainBrute(domain string, depth int, concurrency int, timeout time.Dura
 			base := queue[i/wordN]
 			sub := subdomainWordlist[i%wordN]
 			name := sub + "." + base
-			ips, err := net.LookupHost(name)
+			ips, err := lookupHostT(name, timeout)
 			if err != nil || len(ips) == 0 {
 				return
 			}
@@ -258,7 +283,7 @@ func SubdomainBrute(domain string, depth int, concurrency int, timeout time.Dura
 
 			// 反向 DNS 发现新域名并入队
 			if level < depth-1 {
-				if rnames, err := net.LookupAddr(ips[0]); err == nil {
+				if rnames, err := lookupAddrT(ips[0], timeout); err == nil {
 					for _, rn := range rnames {
 						rn = strings.TrimSuffix(rn, ".")
 						mu.Lock()

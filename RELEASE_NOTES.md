@@ -1,5 +1,22 @@
 # Release Notes
 
+## v5.0.1
+
+> 静态安全审计整改 + GUI 反馈增强（vulhub 5 靶场实测：POC 检测 + 利用链）。
+
+### 🔒 安全审计修复（24 项）
+
+- **P1**：目标范围/CIDR 上界回绕与 `uint32` 溢出（`255.255.255.255/32` 等）、IPv6 终点 panic；插件 Webhook 空请求 panic；GUI 并发扫描结果串扰（拒绝并发）；无效代理不再静默直连（fail-closed）；拿 shell 链逐步校验状态，不再无条件报告成功
+- **P2**：JSON extractor 改用 `encoding/json` 逐层遍历；UDP ICMP 仅 Code 3 端口不可达且校验内嵌目标 IP/UDP；DNS 查询带 ctx 超时；Store/Monitor 错误传播（迁移失败关闭 DB、原子写状态文件）；`rand_int` 溢出与随机串长度上限；OAST 事件 TTL/容量上限、Serve 失败复位；公共回调 nil 防护；`parsePortSpec` 越界范围拒绝；BSD 桩显式返回 `ErrUnsupported`；`NETSCAN_TLS_VERIFY=1` 可显式开启证书校验
+- **回归测试**：目标范围/CIDR 回绕、端口边界、JSON 路径、rand 极端值、wappalyzergo 技术栈识别、既有全部单测
+
+### 🖥 GUI 反馈（对齐 CLI）
+
+- 扫描页新增实时「扫描日志」：端口扫描结束后自动执行 POC 全量检测，逐端口输出命中详情（ID/名称/等级/复现 URL）与汇总
+- POC 命中行自动标注 `⚠ CVE-...` 标签，结束状态显示命中端口数
+- 「扫描目标漏洞」卡片改为本页独立输出框（原输出写入隐藏面板，点击后无反馈）
+- Web POC 卡片迁至「Web 侦察」页；Banner/侦察/插件输出镜像到扫描日志
+
 ## v5.0
 
 > 模板库重构：用真实 nuclei 模板替换机械生成的漏洞库，只收录 MIT 许可来源。

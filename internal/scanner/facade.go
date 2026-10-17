@@ -15,6 +15,7 @@
 package scanner
 
 import (
+	"strings"
 	"time"
 
 	"portscanner/internal/exploit"
@@ -74,7 +75,16 @@ func NewScanner(opts portscan.Options, onResult func(portscan.Result), onProgres
 		onResult = func(r portscan.Result) {
 			if r.State == portscan.StateOpen {
 				if opts.POC {
-					r.Vuln = poc.RunPOC(r.IP, r.Port, sc.Timeout())
+					hits := poc.ScanPOCs(r.IP, r.Port, sc.Timeout())
+					if len(hits) > 0 {
+						ids := make([]string, 0, len(hits))
+						for _, h := range hits {
+							if f := strings.Fields(h.Name); len(f) > 0 {
+								ids = append(ids, f[0])
+							}
+						}
+						r.Vuln = strings.Join(ids, ", ")
+					}
 				}
 				if opts.Fingerprint && r.Protocol == "tcp" && portscan.IsHTTPService(r.Service) {
 					https := r.Service == "https" || r.Service == "https-alt" || r.Port == 443 || r.Port == 8443

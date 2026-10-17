@@ -34,7 +34,8 @@ type ScanRecord struct {
 
 // Store 本地资产存储(SQLite, 纯 Go 无 CGO)
 type Store struct {
-	db *sql.DB
+	db      *sql.DB
+	initErr error
 }
 
 // OpenStore 打开(或创建)资产数据库
@@ -42,39 +43,53 @@ func OpenStore(dir string) *Store {
 	if dir == "" {
 		dir = DefaultStateDir()
 	}
-	_ = os.MkdirAll(dir, 0o755)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return &Store{initErr: err}
+	}
 	db, err := sql.Open("sqlite", filepath.Join(dir, "netscan.db"))
 	if err != nil {
-		return nil
+		return &Store{initErr: err}
 	}
 	s := &Store{db: db}
-	s.migrate()
+	if err := s.migrate(); err != nil {
+		db.Close()
+		s.db = nil
+		s.initErr = err
+	}
 	return s
 }
 
-func (s *Store) migrate() {
+func (s *Store) migrate() error {
 	if s == nil || s.db == nil {
-		return
+		return nil
 	}
-	s.db.Exec(`CREATE TABLE IF NOT EXISTS scans (
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS scans (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		target TEXT NOT NULL,
 		time TEXT NOT NULL,
 		results TEXT NOT NULL
-	)`)
-	s.db.Exec(`CREATE TABLE IF NOT EXISTS assets (
+	)`,
+		`CREATE TABLE IF NOT EXISTS assets (
 		key TEXT PRIMARY KEY,
 		ip TEXT, port INTEGER, protocol TEXT, service TEXT, version TEXT, vuln TEXT,
 		first_seen TEXT, last_seen TEXT
-	)`)
-	s.db.Exec(`CREATE TABLE IF NOT EXISTS exploits (
+	)`,
+		`CREATE TABLE IF NOT EXISTS exploits (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		service TEXT, vuln_id TEXT, success INTEGER, time TEXT
-	)`)
-	s.db.Exec(`CREATE TABLE IF NOT EXISTS changes (
+	)`,
+		`CREATE TABLE IF NOT EXISTS changes (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		target TEXT, change_type TEXT, item TEXT, time TEXT
-	)`)
+	)`,
+	}
+	for _, q := range stmts {
+		if _, err := s.db.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Close 关闭数据库
@@ -86,26 +101,38 @@ func (s *Store) Close() {
 
 // Save 保存一次扫描结果(--store)
 func (s *Store) Save(target string, results []portscan.Result) error {
-	if s == nil || s.db == nil {
+	if s == nil {
 		return nil
 	}
-	data, _ := json.Marshal(results)
+	if s.initErr != nil {
+		return s.initErr
+	}
+	if s.db == nil {
+		return nil
+	}
+	data, err := json.Marshal(results)
+	if err != nil {
+		return err
+	}
 	now := time.Now().Format(time.RFC3339)
 	if _, err := s.db.Exec(`INSERT INTO scans (target, time, results) VALUES (?, ?, ?)`, target, now, string(data)); err != nil {
 		return err
 	}
 	for _, a := range resultsToAssets(results) {
-		s.upsertAsset(a)
+		if err := s.upsertAsset(a); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (s *Store) upsertAsset(a StoreAsset) {
+func (s *Store) upsertAsset(a StoreAsset) error {
 	now := time.Now().Format(time.RFC3339)
-	_, _ = s.db.Exec(`INSERT INTO assets (key, ip, port, protocol, service, version, vuln, first_seen, last_seen)
+	_, err := s.db.Exec(`INSERT INTO assets (key, ip, port, protocol, service, version, vuln, first_seen, last_seen)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(key) DO UPDATE SET service=excluded.service, version=excluded.version, vuln=excluded.vuln, last_seen=excluded.last_seen`,
 		a.IP+":"+netx.Itoa(a.Port)+"/"+a.Protocol, a.IP, a.Port, a.Protocol, a.Service, a.Version, a.Vuln, now, now)
+	return err
 }
 
 // History 查看目标的历史扫描记录(--history)
@@ -122,10 +149,12 @@ func (s *Store) History(target string) ([]ScanRecord, error) {
 	for rows.Next() {
 		var t, rj string
 		if err := rows.Scan(&t, &rj); err != nil {
-			continue
+			return nil, err
 		}
 		var results []portscan.Result
-		_ = json.Unmarshal([]byte(rj), &results)
+		if err := json.Unmarshal([]byte(rj), &results); err != nil {
+			return nil, err
+		}
 		tm, _ := time.Parse(time.RFC3339, t)
 		out = append(out, ScanRecord{Target: target, Time: tm, Assets: resultsToAssets(results)})
 	}
@@ -135,7 +164,10 @@ func (s *Store) History(target string) ([]ScanRecord, error) {
 // Diff 与上次记录比对(--diff)
 func (s *Store) Diff(target string, results []portscan.Result) (added, removed []StoreAsset, err error) {
 	recs, err := s.History(target)
-	if err != nil || len(recs) == 0 {
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(recs) == 0 {
 		cur := resultsToAssets(results)
 		return cur, nil, nil
 	}
@@ -162,13 +194,18 @@ func (s *Store) Diff(target string, results []portscan.Result) (added, removed [
 	sortAssets(removed)
 	// 记录变更
 	now := time.Now().Format(time.RFC3339)
+	var chErr error
 	for _, a := range added {
-		s.db.Exec(`INSERT INTO changes (target, change_type, item, time) VALUES (?, 'add', ?, ?)`, target, a.key(), now)
+		if _, e := s.db.Exec(`INSERT INTO changes (target, change_type, item, time) VALUES (?, 'add', ?, ?)`, target, a.key(), now); e != nil && chErr == nil {
+			chErr = e
+		}
 	}
 	for _, a := range removed {
-		s.db.Exec(`INSERT INTO changes (target, change_type, item, time) VALUES (?, 'remove', ?, ?)`, target, a.key(), now)
+		if _, e := s.db.Exec(`INSERT INTO changes (target, change_type, item, time) VALUES (?, 'remove', ?, ?)`, target, a.key(), now); e != nil && chErr == nil {
+			chErr = e
+		}
 	}
-	return added, removed, nil
+	return added, removed, chErr
 }
 
 // RecordExploit 记录漏洞利用

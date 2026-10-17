@@ -93,15 +93,15 @@ func (s *udpScanner) recvLoop() {
 		if err != nil {
 			continue
 		}
-		if rm.Type != ipv4.ICMPTypeDestinationUnreachable {
+		if rm.Type != ipv4.ICMPTypeDestinationUnreachable || rm.Code != 3 {
 			continue
 		}
 		body, ok := rm.Body.(*icmp.DstUnreach)
 		if !ok {
 			continue
 		}
-		port := parseUnreachPort(body.Data)
-		if port == 0 {
+		dstIP, port := parseUnreachDst(body.Data)
+		if port == 0 || dstIP == nil || !dstIP.Equal(net.ParseIP(s.ip)) {
 			continue
 		}
 		s.mu.Lock()
@@ -119,14 +119,18 @@ func (s *udpScanner) recvLoop() {
 	}
 }
 
-// parseUnreachPort 从 ICMP 不可达报文内嵌的原始包中提取目标端口
-func parseUnreachPort(data []byte) int {
+// parseUnreachDst 从 ICMP 不可达报文内嵌的原始 IP/UDP 包中提取目标 IP 与端口
+func parseUnreachDst(data []byte) (net.IP, int) {
 	if len(data) < 28 {
-		return 0
+		return nil, 0
 	}
 	ihl := int(data[0]&0x0f) * 4
-	if len(data) < ihl+4 {
-		return 0
+	if ihl < 20 || len(data) < ihl+4 {
+		return nil, 0
 	}
-	return int(binary.BigEndian.Uint16(data[ihl+2 : ihl+4]))
+	if data[9] != 17 { // 仅处理内嵌 UDP
+		return nil, 0
+	}
+	dst := net.IPv4(data[16], data[17], data[18], data[19])
+	return dst, int(binary.BigEndian.Uint16(data[ihl+2 : ihl+4]))
 }

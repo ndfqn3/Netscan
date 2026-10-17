@@ -67,6 +67,7 @@ func Run() {
 
 	var mu sync.Mutex
 	var current *scanner.Scanner
+	var scanRunning bool
 	var resultMu sync.Mutex
 	var collected []scanner.Result
 	var lastTarget, lastPorts string
@@ -82,6 +83,7 @@ func Run() {
 	}
 	recon := func(line string) {
 		dispatchJS("window.addRecon(" + strconv.Quote(line) + ")")
+		dispatchJS("window.addScanLog(" + strconv.Quote(line) + ")")
 	}
 	recon2 := func(line string) {
 		dispatchJS("window.addExploitRecon(" + strconv.Quote(line) + ")")
@@ -121,6 +123,19 @@ func Run() {
 		}
 		opts := buildOptions(req)
 
+		if req.POC {
+			dispatchJS(`window.onProgress({"Message":"POC 已启用: 端口扫描完成后对开放端口全量检测(结果写入扫描日志并标注)"})`)
+		}
+		dispatchJS("window.clearScanLog()")
+
+		mu.Lock()
+		if scanRunning {
+			mu.Unlock()
+			return fmt.Errorf("已有扫描任务运行中, 请等待完成或先停止")
+		}
+		scanRunning = true
+		mu.Unlock()
+
 		resultMu.Lock()
 		collected = nil
 		lastTarget = strings.Join(req.Targets, ",")
@@ -146,12 +161,55 @@ func Run() {
 
 		go func() {
 			defer func() {
+				mu.Lock()
+				scanRunning = false
+				mu.Unlock()
+			}()
+			defer func() {
 				if r := recover(); r != nil {
 					dispatchJS("window.onScanDone(" + strconv.Quote(fmt.Sprintf("扫描异常: %v", r)) + ")")
 				}
 			}()
-			if err := s.Run(); err != nil {
-				dispatchJS("window.onScanDone(" + strconv.Quote("扫描出错: "+err.Error()) + ")")
+			runErr := s.Run()
+			if req.POC {
+				resultMu.Lock()
+				rs := make([]scanner.Result, len(collected))
+				copy(rs, collected)
+				resultMu.Unlock()
+				dispatchJS("window.addScanLog(" + strconv.Quote("========== POC 检测开始(全量模板) ==========") + ")")
+				total := 0
+				for i := range rs {
+					r := rs[i]
+					if r.State != scanner.StateOpen || r.Protocol != "tcp" {
+						continue
+					}
+					dispatchJS("window.addScanLog(" + strconv.Quote(fmt.Sprintf("[POC] 检查 %s:%d ...", r.IP, r.Port)) + ")")
+					hits := scanner.ScanPOCs(r.IP, r.Port, 3*time.Second)
+					if len(hits) == 0 {
+						continue
+					}
+					ids := make([]string, 0, len(hits))
+					for _, h := range hits {
+						total++
+						dispatchJS("window.addScanLog(" + strconv.Quote(fmt.Sprintf("[命中] %s:%d %s | 复现: %s", r.IP, r.Port, h.Name, h.Steps)) + ")")
+						if f := strings.Fields(h.Name); len(f) > 0 {
+							ids = append(ids, f[0])
+						}
+					}
+					if len(ids) > 0 {
+						vuln := strings.Join(ids, ", ")
+						resultMu.Lock()
+						if i < len(collected) {
+							collected[i].Vuln = vuln
+						}
+						resultMu.Unlock()
+						dispatchJS(fmt.Sprintf("window.markVuln(%s, %d, %s)", strconv.Quote(r.IP), r.Port, strconv.Quote(vuln)))
+					}
+				}
+				dispatchJS("window.addScanLog(" + strconv.Quote(fmt.Sprintf("========== POC 检测完成: %d 个命中 ==========", total)) + ")")
+			}
+			if runErr != nil {
+				dispatchJS("window.onScanDone(" + strconv.Quote("扫描出错: "+runErr.Error()) + ")")
 			} else {
 				dispatchJS(`window.onScanDone("扫描完成")`)
 			}
@@ -387,25 +445,29 @@ func Run() {
 	// 扫描目标所有漏洞(仅命中)
 	w.Bind("scanVuln", func(target string, port int) error {
 		go func() {
+			vulnOut := func(line string) {
+				dispatchJS("window.addVulnScanOut(" + strconv.Quote(line) + ")")
+			}
+			dispatchJS("window.clearVulnScanOut()")
 			ip, err := resolveHost(target)
 			if err != nil {
-				recon2("无法解析 " + target)
+				vulnOut("无法解析 " + target)
 				return
 			}
 			if port <= 0 {
 				port = 80
 			}
-			recon2(fmt.Sprintf("========== 扫描漏洞 %s:%d ==========", ip, port))
+			vulnOut(fmt.Sprintf("========== 扫描漏洞 %s:%d ==========", ip, port))
 			hits := scanner.ScanVulns(ip, port, 3*time.Second)
 			if len(hits) == 0 {
-				recon2("未发现漏洞")
+				vulnOut("未发现漏洞")
 			} else {
-				recon2(fmt.Sprintf("命中 %d 个漏洞:", len(hits)))
+				vulnOut(fmt.Sprintf("命中 %d 个漏洞:", len(hits)))
 				for _, h := range hits {
-					recon2(fmt.Sprintf("● %s\n  复现: %s", h.Name, h.Steps))
+					vulnOut(fmt.Sprintf("● %s\n  复现: %s", h.Name, h.Steps))
 				}
 			}
-			recon2("========== 漏洞扫描完成 ==========")
+			vulnOut("========== 漏洞扫描完成 ==========")
 		}()
 		return nil
 	})
@@ -864,7 +926,7 @@ func buildOptions(req scanRequest) scanner.Options {
 	opts.VersionDetect = req.VersionDetect
 	opts.OSDetect = req.OSDetect
 	opts.ResolveDNS = req.ResolveDNS
-	opts.POC = req.POC
+	opts.POC = false // GUI 在端口扫描完成后执行 POC 全量检测(实时写入扫描日志并标注行)
 	opts.Fingerprint = req.Fingerprint
 	opts.StopAfterHost = req.StopAfter
 	opts.ProxyURL = req.Proxy

@@ -1,6 +1,7 @@
 package netx
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -35,8 +36,11 @@ func StartOAST(advertise string) error {
 		return nil
 	}
 	host, port, err := net.SplitHostPort(advertise)
-	if err != nil || host == "" {
+	if err != nil {
 		return err
+	}
+	if host == "" {
+		return fmt.Errorf("OAST 回调地址缺少 host: %q", advertise)
 	}
 	ln, err := net.Listen("tcp", "0.0.0.0:"+port)
 	if err != nil {
@@ -73,7 +77,16 @@ func StartOAST(advertise string) error {
 	})
 	oastSrv = &http.Server{Handler: mux}
 	oastStart = true
-	go func() { _ = oastSrv.Serve(ln) }()
+	go func(srv *http.Server) {
+		err := srv.Serve(ln)
+		oastMu.Lock()
+		defer oastMu.Unlock()
+		if err != nil && err != http.ErrServerClosed {
+			oastURL = ""
+		}
+		oastStart = false
+		oastSrv = nil
+	}(oastSrv)
 	return nil
 }
 
@@ -83,8 +96,20 @@ func recordOAST(token, proto, request string) {
 	if oastHits == nil {
 		return
 	}
+	now := time.Now()
+	for k, ev := range oastHits {
+		if now.Sub(ev.Time) > 10*time.Minute {
+			delete(oastHits, k)
+		}
+	}
+	if len(oastHits) >= 1024 {
+		for k := range oastHits {
+			delete(oastHits, k)
+			break
+		}
+	}
 	if _, exists := oastHits[token]; !exists {
-		oastHits[token] = OASTEvent{Time: time.Now(), Protocol: proto, Request: request}
+		oastHits[token] = OASTEvent{Time: now, Protocol: proto, Request: request}
 	}
 }
 

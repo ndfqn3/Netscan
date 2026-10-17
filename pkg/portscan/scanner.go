@@ -77,8 +77,8 @@ func timingParams(t int) (time.Duration, int) {
 // Run 执行扫描
 func (s *Scanner) Run() error {
 	// 代理设置(结束后清空)
-	netx.SetProxy(s.opts.ProxyURL)
-	defer netx.SetProxy("")
+	resetProxy := netx.SetProxy(s.opts.ProxyURL)
+	defer resetProxy()
 
 	// proot 安全降级
 	if applyProotSafety(&s.opts) && s.opts.Verbose {

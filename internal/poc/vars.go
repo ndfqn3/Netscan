@@ -67,6 +67,9 @@ func randFrom(n int, chars string) string {
 	if n <= 0 {
 		n = 8
 	}
+	if n > 4096 {
+		n = 4096
+	}
 	if chars == "" {
 		chars = helperAlpha + helperDigits
 	}
@@ -138,7 +141,14 @@ func evalHelper(expr string) (string, bool) {
 		if b < a {
 			a, b = b, a
 		}
-		return strconv.Itoa(a + rand.Intn(b-a+1)), true
+		span := uint64(b) - uint64(a) + 1
+		var r uint64
+		if span == 0 { // 全 int64 范围, 直接取随机位
+			r = rand.Uint64()
+		} else {
+			r = rand.Uint64() % span
+		}
+		return strconv.FormatInt(int64(uint64(a)+r), 10), true
 	case "rand_text_alpha", "rand_text":
 		return randFrom(atoi(arg(args, 0), 8), helperAlpha+helperUpper), true
 	case "rand_text_alphanumeric", "rand_base", "randbase":

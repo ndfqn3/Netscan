@@ -194,7 +194,10 @@ func (m *PluginManager) Notify(results []portscan.Result) {
 			"results": results,
 		})
 		client := &http.Client{Timeout: 5 * time.Second}
-		req, _ := http.NewRequest("POST", p.Webhook, strings.NewReader(string(payload)))
+		req, err := http.NewRequest("POST", p.Webhook, strings.NewReader(string(payload)))
+		if err != nil {
+			continue
+		}
 		req.Header.Set("Content-Type", "application/json")
 		if resp, err := client.Do(req); err == nil {
 			_ = resp.Body.Close()

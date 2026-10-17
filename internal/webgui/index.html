@@ -380,6 +380,7 @@
         </table>
         <div id="empty" class="empty">暂无结果，输入目标后点击「开始扫描」</div>
       </div>
+      <pre id="scan-log" class="recon-out" style="margin-top:8px;max-height:160px">[扫描日志]</pre>
     </section>
 
     <!-- Web 侦察已迁移至独立标签页 tab-web -->
@@ -543,25 +544,7 @@
       </div>
     </div>
     <button id="sv-start" class="primary">▶ 扫描漏洞(仅命中+复现)</button>
-  </section>
-
-  <section class="card">
-    <h2>扫描 Web POC</h2>
-    <div class="field">
-      <label>目标 / 端口</label>
-      <div style="display:flex;gap:8px">
-        <input id="poc-target" placeholder="192.168.1.1">
-        <input id="poc-port" type="number" value="80" min="1">
-      </div>
-    </div>
-    <div class="field">
-      <label>定向过滤(--poc-id) / OAST 回调(--oast, 留空跳过回调模板)</label>
-      <div style="display:flex;gap:8px">
-        <input id="poc-filter" placeholder="CVE-2021-44228">
-        <input id="poc-oast" placeholder="本机IP:9999 (端口0随机)">
-      </div>
-    </div>
-    <button id="poc-start" class="primary">▶ 扫描 Web POC(生成报告)</button>
+    <pre id="vuln-scan-out" class="recon-out" style="margin-top:8px;max-height:180px"></pre>
   </section>
 
   <section class="card">
@@ -595,6 +578,25 @@
   <section class="card" style="grid-column:1/-1">
     <h2>利用/爆破结果</h2>
     <div id="exploit-recon" class="recon-out"></div>
+  </section>
+
+  <section class="card">
+    <h2>扫描 Web POC</h2>
+    <div class="field">
+      <label>目标 / 端口</label>
+      <div style="display:flex;gap:8px">
+        <input id="poc-target" placeholder="192.168.1.1">
+        <input id="poc-port" type="number" value="80" min="1">
+      </div>
+    </div>
+    <div class="field">
+      <label>定向过滤(--poc-id) / OAST 回调(--oast, 留空跳过回调模板)</label>
+      <div style="display:flex;gap:8px">
+        <input id="poc-filter" placeholder="CVE-2021-44228">
+        <input id="poc-oast" placeholder="本机IP:9999 (端口0随机)">
+      </div>
+    </div>
+    <button id="poc-start" class="primary">▶ 扫描 Web POC(生成报告)</button>
   </section>
 </main>
 
@@ -945,9 +947,9 @@
         `<td>${badge('os')}</td><td class="svc">操作系统</td><td class="ver">${esc(r.version)}</td><td class="ver">${esc(r.os)}</td></tr>`);
     } else {
       tbody.insertAdjacentHTML('beforeend',
-        `<tr><td class="mono">${esc(r.ip)}</td><td>${esc(r.hostname)}</td><td class="mono">${r.port}</td>` +
+        `<tr data-ip="${esc(r.ip)}" data-port="${r.port}"><td class="mono">${esc(r.ip)}</td><td>${esc(r.hostname)}</td><td class="mono">${r.port}</td>` +
         `<td>${esc(r.protocol)}</td><td>${badge(r.state)}</td>` +
-        `<td class="svc">${esc(r.service)}${r.vuln ? ` <span class="vuln-tag" title="${esc(r.vuln)}">⚠高危</span>` : ''}</td>` +
+        `<td class="svc">${esc(r.service)}${r.vuln ? ` <span class="vuln-tag" title="${esc(r.vuln)}">⚠ ${esc(r.vuln.length > 48 ? r.vuln.slice(0, 48) + '…' : r.vuln)}</span>` : ''}</td>` +
         `<td class="ver">${esc(r.version)}</td><td class="ver">${esc(r.os)}</td></tr>`);
     }
     const empty = $('empty'); if (empty) empty.style.display = 'none';
@@ -970,7 +972,8 @@
     const open = results.filter(r => r.state === 'open');
     const upHosts = new Set(results.filter(r => r.state === 'up').map(r => r.ip)).size;
     const openHosts = new Set(open.map(r => r.ip)).size;
-    $('status').textContent = `${msg} · 存活主机 ${upHosts} · 有端口主机 ${openHosts} · 开放端口 ${open.length}`;
+    const vulnCount = results.filter(r => r.vuln).length;
+    $('status').textContent = `${msg} · 存活主机 ${upHosts} · 有端口主机 ${openHosts} · 开放端口 ${open.length}` + (vulnCount ? ` · POC 命中 ${vulnCount} 个端口` : '');
   };
 
   window.addRecon = function(line) {
@@ -984,6 +987,52 @@
     const el = $('exploit-recon');
     el.textContent += line + '\n';
     el.scrollTop = el.scrollHeight;
+  };
+
+  window.addScanLog = function(line) {
+    const el = $('scan-log');
+    if (!el) return;
+    if (el.dataset.empty === '1') { el.textContent = ''; el.dataset.empty = '0'; }
+    el.textContent += line + '\n';
+    el.scrollTop = el.scrollHeight;
+  };
+
+  window.clearScanLog = function() {
+    const el = $('scan-log');
+    if (el) { el.textContent = ''; el.dataset.empty = '0'; }
+  };
+
+  window.addVulnScanOut = function(line) {
+    const el = $('vuln-scan-out');
+    if (!el) return;
+    el.textContent += line + '\n';
+    el.scrollTop = el.scrollHeight;
+  };
+
+  window.clearVulnScanOut = function() {
+    const el = $('vuln-scan-out');
+    if (el) el.textContent = '';
+  };
+
+  window.markVuln = function(ip, port, text) {
+    for (const r of results) {
+      if (r.ip === ip && String(r.port) === String(port)) { r.vuln = text; }
+    }
+    const rows = document.querySelectorAll('#results tr[data-ip][data-port]');
+    for (const tr of rows) {
+      if (tr.dataset.ip === ip && tr.dataset.port === String(port)) {
+        const cell = tr.querySelector('.svc');
+        if (cell && !cell.querySelector('.vuln-tag')) {
+          const span = document.createElement('span');
+          span.className = 'vuln-tag';
+          span.title = text;
+          span.textContent = '⚠ ' + (text.length > 48 ? text.slice(0, 48) + '…' : text);
+          cell.appendChild(document.createTextNode(' '));
+          cell.appendChild(span);
+        }
+        return;
+      }
+    }
   };
 
   window.addFuzzOut = function(line) {

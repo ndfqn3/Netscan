@@ -36,7 +36,11 @@ func DiffState(dir, target string, items []string) (added, removed []string, err
 
 	var prev MonitorState
 	if data, rerr := os.ReadFile(path); rerr == nil {
-		_ = json.Unmarshal(data, &prev)
+		if uerr := json.Unmarshal(data, &prev); uerr != nil {
+			return nil, nil, uerr
+		}
+	} else if !os.IsNotExist(rerr) {
+		return nil, nil, rerr
 	}
 
 	prevSet := map[string]bool{}
@@ -64,7 +68,19 @@ func DiffState(dir, target string, items []string) (added, removed []string, err
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return added, removed, err
 	}
-	data, _ := json.MarshalIndent(state, "", "  ")
-	_ = os.WriteFile(path, data, 0o644)
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return added, removed, err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return added, removed, err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		if werr := os.WriteFile(path, data, 0o644); werr != nil {
+			return added, removed, werr
+		}
+	}
 	return added, removed, nil
 }

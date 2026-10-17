@@ -10,23 +10,14 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// Itoa 无分配整数转字符串
+// Itoa 整数转字符串(含负数)
 func Itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var buf [20]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(buf[i:])
+	return strconv.Itoa(n)
 }
 
 // RandomHex 生成 n 字节随机数的十六进制串(软404基线路径等使用)

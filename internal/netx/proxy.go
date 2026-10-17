@@ -3,9 +3,11 @@ package netx
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sync"
 	"time"
 
@@ -17,11 +19,19 @@ var (
 	activeProxy string
 )
 
-// SetProxy 设置全局代理地址(扫描开始时调用, 结束后清空)
-func SetProxy(u string) {
+// SetProxy 设置全局代理地址, 返回恢复函数(仅当设置未被后续覆盖时生效)
+func SetProxy(u string) func() {
 	proxyMu.Lock()
+	prev := activeProxy
 	activeProxy = u
 	proxyMu.Unlock()
+	return func() {
+		proxyMu.Lock()
+		if activeProxy == u {
+			activeProxy = prev
+		}
+		proxyMu.Unlock()
+	}
 }
 
 func getProxy() string {
@@ -38,11 +48,11 @@ func DialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
 	}
 	u, err := url.Parse(pu)
 	if err != nil {
-		return net.DialTimeout("tcp", addr, timeout)
+		return nil, fmt.Errorf("无效代理地址 %q: %w", pu, err)
 	}
 	d, err := proxy.FromURL(u, proxy.Direct)
 	if err != nil {
-		return net.DialTimeout("tcp", addr, timeout)
+		return nil, fmt.Errorf("代理初始化失败 %q: %w", pu, err)
 	}
 	if cd, ok := d.(proxy.ContextDialer); ok {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -52,9 +62,12 @@ func DialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
 	return d.Dial("tcp", addr)
 }
 
+// tlsVerifyEnabled 由 NETSCAN_TLS_VERIFY=1 开启证书校验(默认跳过, 便于自签靶场)
+func tlsVerifyEnabled() bool { return os.Getenv("NETSCAN_TLS_VERIFY") == "1" }
+
 // sharedTransport 全局共享 HTTP Transport(连接池复用, 代理动态获取)
 var sharedTransport = &http.Transport{
-	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	TLSClientConfig: &tls.Config{InsecureSkipVerify: !tlsVerifyEnabled()},
 	Proxy: func(req *http.Request) (*url.URL, error) {
 		if pu := getProxy(); pu != "" {
 			return url.Parse(pu)

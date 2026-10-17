@@ -105,8 +105,14 @@ func cidrToIPs(cidr string, maxTargets int) ([]string, error) {
 	hostBits := ^mask
 	if hostBits <= 1 {
 		var out []string
-		for i := network; i <= broadcast; i++ {
+		for i := network; ; i++ {
 			out = append(out, uint32ToIP(i))
+			if i == broadcast {
+				break
+			}
+		}
+		if maxTargets > 0 && len(out) > maxTargets {
+			return nil, fmt.Errorf("目标 %s 含 %d 个 IP, 超过上限 %d", cidr, len(out), maxTargets)
 		}
 		return out, nil
 	}
@@ -152,23 +158,32 @@ func rangeToIPs(r string, maxTargets int) ([]string, error) {
 	}
 
 	start := ipToUint32(baseIP.To4())
-	stop := ipToUint32(endIP.To4())
-	if stop < start {
+	if endIP.To4() == nil {
+		return nil, fmt.Errorf("无效范围终点 %s (仅支持 IPv4)", end)
+	}
+	start64 := uint64(start)
+	stop64 := uint64(ipToUint32(endIP.To4()))
+	if stop64 < start64 {
 		return nil, fmt.Errorf("范围终点小于起点: %s", r)
 	}
-	if maxTargets > 0 && stop-start+1 > uint32(maxTargets) {
-		return nil, fmt.Errorf("目标 %s 含 %d 个 IP, 超过上限 %d", r, stop-start+1, maxTargets)
+	count := stop64 - start64 + 1
+	if maxTargets > 0 && count > uint64(maxTargets) {
+		return nil, fmt.Errorf("目标 %s 含 %d 个 IP, 超过上限 %d", r, count, maxTargets)
 	}
 	var out []string
-	for i := start; i <= stop; i++ {
-		out = append(out, uint32ToIP(i))
+	for i := start64; ; i++ {
+		out = append(out, uint32ToIP(uint32(i)))
+		if i == stop64 {
+			break
+		}
 	}
 	return out, nil
 }
 
 func ipToUint32(ip net.IP) uint32 {
-	if len(ip) == 16 {
-		ip = ip[12:16]
+	ip = ip.To4()
+	if ip == nil {
+		return 0
 	}
 	return binary.BigEndian.Uint32(ip)
 }

@@ -783,6 +783,10 @@ func Run() {
 		b, _ := json.Marshal(scanner.OpenPOCManager("").List())
 		return string(b)
 	})
+	w.Bind("pocBuiltinList", func(filter string) string {
+		b, _ := json.Marshal(scanner.POCBuiltinList(filter, 300))
+		return string(b)
+	})
 	w.Bind("pocAdd", func(path string) error { return scanner.OpenPOCManager("").Add(path) })
 	w.Bind("pocRemove", func(id string) error { return scanner.OpenPOCManager("").Remove(id) })
 	w.Bind("moduleList", func() string {

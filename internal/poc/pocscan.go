@@ -36,6 +36,36 @@ func ScanPOCsFiltered(ip string, port int, timeout time.Duration, filter string)
 	return scanLists(ip, port, timeout, [][]POCTemplate{list})
 }
 
+// BuiltinPOCInfo 内置模板摘要(GUI 列表用)
+type BuiltinPOCInfo struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Severity string `json:"severity"`
+}
+
+// BuiltinPOCList 返回内置模板摘要, 按 id/name 过滤, 0 表示不限制
+func BuiltinPOCList(filter string, limit int) []BuiltinPOCInfo {
+	f := strings.ToLower(strings.TrimSpace(filter))
+	out := make([]BuiltinPOCInfo, 0, 64)
+	appendList := func(list []POCTemplate) bool {
+		for _, t := range list {
+			if f != "" && !strings.Contains(strings.ToLower(t.ID), f) && !strings.Contains(strings.ToLower(t.Name), f) {
+				continue
+			}
+			out = append(out, BuiltinPOCInfo{ID: t.ID, Name: t.Name, Severity: t.Severity})
+			if limit > 0 && len(out) >= limit {
+				return true
+			}
+		}
+		return false
+	}
+	if appendList(nucleiPOCs) {
+		return out
+	}
+	appendList(nucleiExtraPOCs)
+	return out
+}
+
 func scanLists(ip string, port int, timeout time.Duration, lists [][]POCTemplate) []VulnHit {
 	var hits []VulnHit
 	var mu sync.Mutex

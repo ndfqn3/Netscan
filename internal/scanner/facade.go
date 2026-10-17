@@ -114,6 +114,11 @@ var (
 
 // ---- POC(internal/poc) ----
 
+// POCBuiltinList 内置模板摘要(id/name 过滤, limit<=0 不限制)
+func POCBuiltinList(filter string, limit int) []poc.BuiltinPOCInfo {
+	return poc.BuiltinPOCList(filter, limit)
+}
+
 type (
 	VulnHit     = poc.VulnHit
 	POCTemplate = poc.POCTemplate

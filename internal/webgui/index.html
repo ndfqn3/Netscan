@@ -598,6 +598,18 @@
     </div>
     <button id="poc-start" class="primary">▶ 扫描 Web POC(生成报告)</button>
   </section>
+
+  <section class="card">
+    <h2>内置 POC 模板库 <span id="poc-builtin-count" style="color:var(--muted);font-size:12px"></span></h2>
+    <div class="field">
+      <label>搜索(ID/名称; 留空显示前 300 条) — 点击「运行」使用上方目标/端口与 OAST 配置</label>
+      <div style="display:flex;gap:8px">
+        <input id="poc-builtin-filter" placeholder="CVE-2021-41773 / struts2 / weblogic" style="flex:1">
+        <button id="poc-builtin-search" class="primary">搜索</button>
+      </div>
+    </div>
+    <pre id="poc-builtin-out" class="recon-out" style="max-height:280px"></pre>
+  </section>
 </main>
 
 <main id="tab-assets" class="tab-panel" style="display:none">
@@ -1281,6 +1293,35 @@
     window.pocScanEx(t, parseInt($('poc-port').value,10)||80,
       $('poc-filter').value.trim(), $('poc-oast').value.trim());
   });
+
+  // 内置 POC 模板库: 搜索 + 一键运行(使用 Web POC 卡片的目标/端口/OAST)
+  async function loadBuiltinPOCs() {
+    const f = $('poc-builtin-filter').value.trim();
+    let list = [];
+    try { list = JSON.parse(await window.pocBuiltinList(f) || '[]'); } catch (e) { list = []; }
+    $('poc-builtin-count').textContent = `(匹配 ${list.length})`;
+    if (!list.length) { $('poc-builtin-out').textContent = '(无匹配模板)'; return; }
+    $('poc-builtin-out').innerHTML = list.map(function(p) {
+      return '<div style="display:flex;gap:8px;align-items:center;padding:2px 0">' +
+        '<span class="mono" style="min-width:180px">' + esc(p.id) + '</span>' +
+        '<span style="flex:1">' + esc(p.name) + '</span>' +
+        '<span style="color:var(--muted);min-width:60px">' + esc(p.severity || '') + '</span>' +
+        '<button class="poc-run" data-id="' + esc(p.id) + '">运行</button></div>';
+    }).join('');
+  }
+  $('poc-builtin-search').addEventListener('click', loadBuiltinPOCs);
+  $('poc-builtin-filter').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') loadBuiltinPOCs();
+  });
+  $('poc-builtin-out').addEventListener('click', function(e) {
+    const btn = e.target.closest('.poc-run');
+    if (!btn) return;
+    const t = $('poc-target').value.trim();
+    const p = parseInt($('poc-port').value,10) || 80;
+    if (!t) { window.addExploitRecon('请先在上方「扫描 Web POC」卡片填写目标'); return; }
+    window.pocScanEx(t, p, btn.dataset.id, $('poc-oast').value.trim());
+  });
+  loadBuiltinPOCs();
 
   // SSH 爆破 + 弹 shell
   $('ssh-start').addEventListener('click', function() {

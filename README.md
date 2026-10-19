@@ -2,7 +2,7 @@
 
 一款用 Go 编写的全能网络扫描器，提供 **命令行（CLI）** 与 **图形界面（GUI）** 两种形态，集主机发现、端口扫描、服务识别、OS 识别、漏洞检测、漏洞利用、一键拿 shell、Web 侦察、插件/模块/字典/POC 平台化扩展于一体。
 
-> **v5.0 新增**：nmap 无授权合规整改（指纹替换为 wappalyzergo MIT + nerva Apache-2.0，见 `THIRD_PARTY_NOTICES.md`）；POC 引擎 v3（payloads/变量/索引 DSL/extractors，5,380 条真实 nuclei 模板）；ffuf 融合（`--fuzz-*` 全功能 + GUI 标签页）；PayloadsAllTheThings 内置字典（`builtin:`）；利用链框架（13 条实测通过）；GUI 新增 Web 侦察与模糊测试标签页。
+> **v5.0.4 更新**：英文文档（[README.en.md](README.en.md) / [RELEASE_NOTES.en.md](RELEASE_NOTES.en.md) / [THIRD_PARTY_NOTICES.en.md](THIRD_PARTY_NOTICES.en.md)）；GUI 新增语言选择与内置 POC 批量检测（选数量一键运行，完成后输出）；此前版本已包含安全审计修复、指纹合规（wappalyzergo/nerva）、POC 引擎 v3、ffuf 融合、内置字典与 13 条实测利用链。
 
 ---
 

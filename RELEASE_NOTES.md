@@ -1,5 +1,20 @@
 # Release Notes
 
+## v5.0.4
+
+> 英文文档 + GUI 语言选择（中文/English）+ 内置 POC 批量检测。
+
+### 📄 文档
+- 新增英文版：`README.en.md`、`RELEASE_NOTES.en.md`、`THIRD_PARTY_NOTICES.en.md`（与中文文档并存）
+- README 开头更新为 v5.0.4 介绍
+
+### 🖥 GUI
+- 右上角新增语言选择（中文/English），选择后静态界面文案切换并记忆（localStorage）
+- WEB 页「内置 POC 批量检测」：目标/端口 + 数量（50/100/200/300/500/全部）一键运行，完成后输出命中
+
+### ⚙ 后端
+- `ScanPOCsFilteredLimit`：按过滤条件限量运行模板；`pocBuiltinList` 绑定与 `POCBuiltinList` 导出
+
 ## v5.0.3
 
 > 内置 POC 模板库统一放在 WEB 页：搜索 + 使用当前目标/端口/OAST 一键运行。

@@ -36,6 +36,26 @@ func ScanPOCsFiltered(ip string, port int, timeout time.Duration, filter string)
 	return scanLists(ip, port, timeout, [][]POCTemplate{list})
 }
 
+// ScanPOCsFilteredLimit 按 id/name 过滤后最多运行 limit 条内置模板(0=不限制)
+func ScanPOCsFilteredLimit(ip string, port int, timeout time.Duration, filter string, limit int) []VulnHit {
+	f := strings.ToLower(strings.TrimSpace(filter))
+	var list []POCTemplate
+	add := func(src []POCTemplate) {
+		for _, t := range src {
+			if limit > 0 && len(list) >= limit {
+				return
+			}
+			if f != "" && !strings.Contains(strings.ToLower(t.ID), f) && !strings.Contains(strings.ToLower(t.Name), f) {
+				continue
+			}
+			list = append(list, t)
+		}
+	}
+	add(nucleiPOCs)
+	add(nucleiExtraPOCs)
+	return scanLists(ip, port, timeout, [][]POCTemplate{list})
+}
+
 // BuiltinPOCInfo 内置模板摘要(GUI 列表用)
 type BuiltinPOCInfo struct {
 	ID       string `json:"id"`

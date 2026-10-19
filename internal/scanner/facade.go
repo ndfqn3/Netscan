@@ -119,6 +119,11 @@ func POCBuiltinList(filter string, limit int) []poc.BuiltinPOCInfo {
 	return poc.BuiltinPOCList(filter, limit)
 }
 
+// ScanPOCsFilteredLimit 按过滤条件运行最多 limit 条内置 POC 模板
+func ScanPOCsFilteredLimit(ip string, port int, timeout time.Duration, filter string, limit int) []poc.VulnHit {
+	return poc.ScanPOCsFilteredLimit(ip, port, timeout, filter, limit)
+}
+
 type (
 	VulnHit     = poc.VulnHit
 	POCTemplate = poc.POCTemplate

@@ -389,22 +389,35 @@
 
 <main id="tab-web" class="tab-panel" style="display:none">
   <section class="card">
-    <h2>内置 POC 模板库 <span id="poc-builtin-count" style="color:var(--muted);font-size:12px"></span></h2>
+    <h2>内置 POC 批量检测 <span id="poc-builtin-count" style="color:var(--muted);font-size:12px"></span></h2>
     <div class="field">
-      <label>目标 / 端口(运行所选模板)</label>
-      <div style="display:flex;gap:8px">
-        <input id="poc-builtin-target" placeholder="IP / 域名" style="flex:1;min-width:200px">
-        <input id="poc-builtin-port" type="number" value="80" min="1" style="max-width:110px">
+      <label>目标 / 端口 / 运行数量</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="poc-builtin-target" placeholder="IP / 域名" style="flex:1;min-width:180px">
+        <input id="poc-builtin-port" type="number" value="80" min="1" style="max-width:100px">
+        <select id="poc-builtin-count">
+          <option value="50">50 条</option>
+          <option value="100" selected>100 条</option>
+          <option value="200">200 条</option>
+          <option value="300">300 条</option>
+          <option value="500">500 条</option>
+          <option value="0">全部 5,380 条</option>
+        </select>
+        <button id="poc-batch-run" class="primary">▶ 一键运行</button>
       </div>
     </div>
     <div class="field">
-      <label>搜索(ID/名称; 留空=前 300 条) — 点击「运行」直接执行</label>
+      <label>可选: 关键字过滤(不填=按库顺序; 搜索后「一键运行」只跑匹配项)</label>
       <div style="display:flex;gap:8px">
-        <input id="poc-builtin-filter" placeholder="CVE-2021-41773 / struts2 / weblogic" style="flex:1">
-        <button id="poc-builtin-search" class="primary">搜索</button>
+        <input id="poc-builtin-filter" placeholder="CVE-2021 / struts2 / weblogic" style="flex:1">
+        <button id="poc-builtin-search">预览匹配</button>
       </div>
     </div>
-    <pre id="poc-builtin-out" class="recon-out" style="max-height:280px"></pre>
+    <pre id="poc-batch-out" class="recon-out" style="max-height:300px">[批量结果]</pre>
+    <details style="margin-top:8px">
+      <summary style="cursor:pointer;color:var(--accent);font-size:13px">高级: 浏览匹配模板(仅查看)</summary>
+      <pre id="poc-builtin-out" class="recon-out" style="max-height:240px"></pre>
+    </details>
   </section>
 
   <section class="card">
@@ -1302,32 +1315,34 @@
       $('poc-filter').value.trim(), $('poc-oast').value.trim());
   });
 
-  // 内置 POC 模板库: 搜索 + 一键运行(使用 Web POC 卡片的目标/端口/OAST)
+  // 内置 POC 批量检测: 选数量 -> 一键运行 -> 完成后输出
   async function loadBuiltinPOCs() {
     const f = $('poc-builtin-filter').value.trim();
     let list = [];
     try { list = JSON.parse(await window.pocBuiltinList(f) || '[]'); } catch (e) { list = []; }
-    $('poc-builtin-count').textContent = `(匹配 ${list.length})`;
+    $('poc-builtin-count').textContent = `(可选 ${list.length}${list.length >= 300 ? '+' : ''} 条)`;
     if (!list.length) { $('poc-builtin-out').textContent = '(无匹配模板)'; return; }
-    $('poc-builtin-out').innerHTML = list.map(function(p) {
-      return '<div style="display:flex;gap:8px;align-items:center;padding:2px 0">' +
-        '<span class="mono" style="min-width:180px">' + esc(p.id) + '</span>' +
-        '<span style="flex:1">' + esc(p.name) + '</span>' +
-        '<span style="color:var(--muted);min-width:60px">' + esc(p.severity || '') + '</span>' +
-        '<button class="poc-run" data-id="' + esc(p.id) + '">运行</button></div>';
-    }).join('');
+    $('poc-builtin-out').textContent = list.map(function(p) {
+      return p.id + '  ' + p.name + '  [' + (p.severity || '') + ']';
+    }).join('\n');
   }
+  window.addPocBatchOut = function(line) {
+    const el = $('poc-batch-out');
+    if (!el) return;
+    el.textContent += line + '\n';
+    el.scrollTop = el.scrollHeight;
+  };
   $('poc-builtin-search').addEventListener('click', loadBuiltinPOCs);
-  $('poc-builtin-filter').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') loadBuiltinPOCs();
-  });
-  $('poc-builtin-out').addEventListener('click', function(e) {
-    const btn = e.target.closest('.poc-run');
-    if (!btn) return;
+  $('poc-builtin-filter').addEventListener('keydown', function(e) { if (e.key === 'Enter') loadBuiltinPOCs(); });
+  $('poc-batch-run').addEventListener('click', function() {
     const t = $('poc-builtin-target').value.trim();
-    const p = parseInt($('poc-builtin-port').value,10) || 80;
-    if (!t) { window.addExploitRecon('请填写内置 POC 目标'); return; }
-    window.pocScanEx(t, p, btn.dataset.id, '');
+    if (!t) { window.addPocBatchOut('请填写目标 IP/域名'); return; }
+    const p = parseInt($('poc-builtin-port').value, 10) || 80;
+    const c = parseInt($('poc-builtin-count').value, 10);
+    const f = $('poc-builtin-filter').value.trim();
+    $('poc-batch-out').textContent = '';
+    window.addPocBatchOut('正在运行, 完成后输出结果...');
+    window.pocBatch(t, p, f, c);
   });
   loadBuiltinPOCs();
 

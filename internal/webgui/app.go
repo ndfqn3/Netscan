@@ -787,6 +787,29 @@ func Run() {
 		b, _ := json.Marshal(scanner.POCBuiltinList(filter, 300))
 		return string(b)
 	})
+	w.Bind("pocBatch", func(target string, port int, filter string, count int) error {
+		go func() {
+			out := func(line string) {
+				dispatchJS("window.addPocBatchOut(" + strconv.Quote(line) + ")")
+			}
+			ip, err := resolveHost(target)
+			if err != nil {
+				out("无法解析 " + target)
+				return
+			}
+			if port <= 0 {
+				port = 80
+			}
+			start := time.Now()
+			out(fmt.Sprintf("===== 批量 POC %s:%d 数量=%d 过滤=%q =====", ip, port, count, filter))
+			hits := scanner.ScanPOCsFilteredLimit(ip, port, 3*time.Second, filter, count)
+			for _, h := range hits {
+				out("● " + h.Name + " | 复现: " + h.Steps)
+			}
+			out(fmt.Sprintf("===== 完成: %d 条命中, 用时 %s =====", len(hits), time.Since(start).Round(time.Second)))
+		}()
+		return nil
+	})
 	w.Bind("pocAdd", func(path string) error { return scanner.OpenPOCManager("").Add(path) })
 	w.Bind("pocRemove", func(id string) error { return scanner.OpenPOCManager("").Remove(id) })
 	w.Bind("moduleList", func() string {

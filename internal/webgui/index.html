@@ -389,6 +389,25 @@
 
 <main id="tab-web" class="tab-panel" style="display:none">
   <section class="card">
+    <h2>内置 POC 模板库 <span id="poc-builtin-count" style="color:var(--muted);font-size:12px"></span></h2>
+    <div class="field">
+      <label>目标 / 端口(运行所选模板)</label>
+      <div style="display:flex;gap:8px">
+        <input id="poc-builtin-target" placeholder="IP / 域名" style="flex:1;min-width:200px">
+        <input id="poc-builtin-port" type="number" value="80" min="1" style="max-width:110px">
+      </div>
+    </div>
+    <div class="field">
+      <label>搜索(ID/名称; 留空=前 300 条) — 点击「运行」直接执行</label>
+      <div style="display:flex;gap:8px">
+        <input id="poc-builtin-filter" placeholder="CVE-2021-41773 / struts2 / weblogic" style="flex:1">
+        <button id="poc-builtin-search" class="primary">搜索</button>
+      </div>
+    </div>
+    <pre id="poc-builtin-out" class="recon-out" style="max-height:280px"></pre>
+  </section>
+
+  <section class="card">
     <h2>Web 侦察目标</h2>
     <div class="field">
       <label>目标(域名/IP, 多个时取第一个)</label>
@@ -599,17 +618,6 @@
     <button id="poc-start" class="primary">▶ 扫描 Web POC(生成报告)</button>
   </section>
 
-  <section class="card">
-    <h2>内置 POC 模板库 <span id="poc-builtin-count" style="color:var(--muted);font-size:12px"></span></h2>
-    <div class="field">
-      <label>搜索(ID/名称; 留空显示前 300 条) — 点击「运行」使用上方目标/端口与 OAST 配置</label>
-      <div style="display:flex;gap:8px">
-        <input id="poc-builtin-filter" placeholder="CVE-2021-41773 / struts2 / weblogic" style="flex:1">
-        <button id="poc-builtin-search" class="primary">搜索</button>
-      </div>
-    </div>
-    <pre id="poc-builtin-out" class="recon-out" style="max-height:280px"></pre>
-  </section>
 </main>
 
 <main id="tab-assets" class="tab-panel" style="display:none">
@@ -1316,10 +1324,10 @@
   $('poc-builtin-out').addEventListener('click', function(e) {
     const btn = e.target.closest('.poc-run');
     if (!btn) return;
-    const t = $('poc-target').value.trim();
-    const p = parseInt($('poc-port').value,10) || 80;
-    if (!t) { window.addExploitRecon('请先在上方「扫描 Web POC」卡片填写目标'); return; }
-    window.pocScanEx(t, p, btn.dataset.id, $('poc-oast').value.trim());
+    const t = $('poc-builtin-target').value.trim();
+    const p = parseInt($('poc-builtin-port').value,10) || 80;
+    if (!t) { window.addExploitRecon('请填写内置 POC 目标'); return; }
+    window.pocScanEx(t, p, btn.dataset.id, '');
   });
   loadBuiltinPOCs();
 

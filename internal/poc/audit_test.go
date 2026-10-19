@@ -34,6 +34,16 @@ func TestJSONPathSimple(t *testing.T) {
 	}
 }
 
+func TestBuiltinPOCList(t *testing.T) {
+	all := BuiltinPOCList("", 0)
+	if len(all) < 5000 {
+		t.Fatalf("内置模板数量异常: %d", len(all))
+	}
+	if got := BuiltinPOCList("CVE-2021-41773", 5); len(got) == 0 {
+		t.Fatal("按 CVE 过滤无结果")
+	}
+}
+
 func TestRandHelperBounds(t *testing.T) {
 	v, ok := evalHelper("rand_int(-5,5)")
 	if !ok {

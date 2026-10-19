@@ -1383,10 +1383,10 @@
     }
   }
   const langSel = $('lang-select');
-  langSel.value = localStorage.getItem('netscan-lang') || 'zh';
+  try { langSel.value = localStorage.getItem('netscan-lang') || 'zh'; } catch (e) { langSel.value = 'zh'; }
   langSel.addEventListener('change', function() {
-    localStorage.setItem('netscan-lang', langSel.value);
     applyLang(langSel.value);
+    try { localStorage.setItem('netscan-lang', langSel.value); } catch (e) {}
   });
   if (langSel.value === 'en') applyLang('en');
 

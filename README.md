@@ -1,4 +1,4 @@
-﻿# NetScan
+# NetScan
 
 涓€娆剧敤 Go 缂栧啓鐨勫叏鑳界綉缁滄壂鎻忓櫒锛屾彁渚?**鍛戒护琛岋紙CLI锛?* 涓?**鍥惧舰鐣岄潰锛圙UI锛?* 涓ょ褰㈡€侊紝闆嗕富鏈哄彂鐜般€佺鍙ｆ壂鎻忋€佹湇鍔¤瘑鍒€丱S 璇嗗埆銆佹紡娲炴娴嬨€佹紡娲炲埄鐢ㄣ€佷竴閿嬁 shell銆乄eb 渚﹀療銆佹彃浠?妯″潡/瀛楀吀/POC 骞冲彴鍖栨墿灞曚簬涓€浣撱€?
 > **v5.0 鏂板**锛歯map 鏃犳巿鏉冨悎瑙勬暣鏀癸紙鎸囩汗鏇挎崲涓?wappalyzergo MIT + nerva Apache-2.0锛岃 `THIRD_PARTY_NOTICES.md`锛夛紱POC 寮曟搸 v3锛坧ayloads/鍙橀噺/绱㈠紩 DSL/extractors锛?,380 鏉＄湡瀹?nuclei 妯℃澘锛夛紱ffuf 铻嶅悎锛坄--fuzz-*` 鍏ㄥ姛鑳?+ GUI 鏍囩椤碉級锛汸ayloadsAllTheThings 鍐呯疆瀛楀吀锛坄builtin:`锛夛紱鍒╃敤閾炬鏋讹紙13 鏉″疄娴嬮€氳繃锛夛紱GUI 鏂板 Web 渚﹀療涓庢ā绯婃祴璇曟爣绛鹃〉銆?

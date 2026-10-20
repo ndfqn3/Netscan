@@ -787,21 +787,39 @@ func Run() {
 		b, _ := json.Marshal(scanner.POCBuiltinList(filter, 300))
 		return string(b)
 	})
-	w.Bind("pocBatch", func(target string, port int, filter string, count int) error {
-		go func() {
+	w.Bind("pocBatch", func(target string, port int, filter string, count int) error {		go func() {
 			out := func(line string) {
 				dispatchJS("window.addPocBatchOut(" + strconv.Quote(line) + ")")
 			}
+			target = strings.TrimSpace(target)
+			for _, pfx := range []string{"http://", "https://"} {
+				target = strings.TrimPrefix(target, pfx)
+			}
+			if i := strings.IndexAny(target, "/?#"); i >= 0 {
+				target = target[:i]
+			}
+			if i := strings.LastIndex(target, ":"); i > 0 {
+				target = target[:i]
+			}
 			ip, err := resolveHost(target)
 			if err != nil {
-				out("无法解析 " + target)
+				out("无法解析目标 " + target + "（请填 IP/域名，可带 http:// 或端口）: " + err.Error())
 				return
 			}
 			if port <= 0 {
 				port = 80
 			}
+			matched := len(scanner.POCBuiltinList(filter, 0))
+			run := matched
+			if count > 0 && count < run {
+				run = count
+			}
+			out(fmt.Sprintf("目标 %s:%d | 过滤=%q | 匹配 %d 条 | 本次运行 %d 条", ip, port, filter, matched, run))
+			if run == 0 {
+				out("没有可运行模板(过滤词无匹配), 未发送任何请求")
+				return
+			}
 			start := time.Now()
-			out(fmt.Sprintf("===== 批量 POC %s:%d 数量=%d 过滤=%q =====", ip, port, count, filter))
 			hits := scanner.ScanPOCsFilteredLimit(ip, port, 3*time.Second, filter, count)
 			for _, h := range hits {
 				out("● " + h.Name + " | 复现: " + h.Steps)

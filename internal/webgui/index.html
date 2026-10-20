@@ -1345,8 +1345,8 @@
     const c = parseInt($('poc-builtin-count').value, 10);
     const f = $('poc-builtin-filter').value.trim();
     $('poc-batch-out').textContent = '';
-    window.addPocBatchOut('正在运行, 完成后输出结果...');
-    window.pocBatch(t, p, f, c);
+    window.addPocBatchOut('正在启动批量检测...');
+    window.pocBatch(t, p, f, c).catch(function(e) { window.addPocBatchOut('调用失败: ' + e); });
   });
   loadBuiltinPOCs();
 
